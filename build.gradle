@@ -1,0 +1,110 @@
+apply plugin: 'java'
+apply plugin:'application'
+
+sourceCompatibility = '1.7'
+targetCompatibility = '1.7'
+
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+mainClassName = "ShieldedCapsule"
+
+group       = "co.paralleluniverse"
+version     = "0.1.0"
+status      = "integration"
+description = "Container Caplet"
+ext.url             = "http://puniverse.github.com/quasar"
+ext.vendor          = "Parallel Universe Software Co."
+ext.licenseName    = "Eclipse Public License - v 1.0"
+ext.licenseUrl     = "http://www.eclipse.org/legal/epl-v10.html"
+ext.scmUrl          = "https://github.com/puniverse/${project.name}"
+ext.scmConnection   = "https://github.com/puniverse/${project.name}.git"
+ext.distDir         = "$buildDir/dist"
+ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
+    
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    compile 'co.paralleluniverse:capsule:0.10.0-SNAPSHOT'
+    testCompile group: 'junit', name: 'junit', version: '4.10'
+}
+
+jar {
+    from { configurations.runtime } 
+    manifest {
+        attributes(
+	    'Main-Class'  : mainClassName,
+        )
+    }
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+///////// Publish Artifacts
+apply plugin: 'maven'
+apply plugin: 'signing'
+    
+artifacts {
+    archives jar
+    archives sourcesJar
+    archives javadocJar
+}
+
+signing {
+    required { isReleaseVersion && gradle.taskGraph.hasTask("uploadArchives") }
+    sign configurations.archives
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { deployment -> signing.signPom(deployment) }
+
+            repository(
+                url: (isReleaseVersion ?
+	                        "https://oss.sonatype.org/service/local/staging/deploy/maven2" :
+	                        "https://oss.sonatype.org/content/repositories/snapshots")) {
+                // User and Password are taken from ~/.gradle/gradle.properties
+                authentication(userName: project.sonatypeUsername, password: project.sonatypePassword)
+            }
+            pom.project {
+                name project.name
+                packaging 'jar'
+                description project.description
+                url project.url
+                scm {
+                    url project.scmUrl
+                    connection project.scmConnection
+                    developerConnection project.scmConnection
+                }
+                licenses {
+                    license {
+                        name project.licenseName
+                        url project.licenseUrl
+                        distribution 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        id 'pron'
+                        name 'Ron Pressler'
+                    }
+                }
+            }
+        }
+    }
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.1'
+}
