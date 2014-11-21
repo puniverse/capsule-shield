@@ -6,7 +6,7 @@ targetCompatibility = '1.7'
 
 [compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
 
-mainClassName = "ShieldedCapsule"
+mainClassName = 'Capsule'
 
 group       = "co.paralleluniverse"
 version     = "0.1.0"
@@ -32,10 +32,11 @@ dependencies {
 }
 
 jar {
-    from { configurations.runtime } 
+    from { configurations.runtime.collect { zipTree(it) } }
     manifest {
         attributes(
 	    'Main-Class'  : mainClassName,
+            'Caplets'     : 'ShieldedCapsule'
         )
     }
 }
