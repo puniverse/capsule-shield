@@ -27,7 +27,7 @@ repositories {
 }
 
 dependencies {
-    compile 'co.paralleluniverse:capsule:0.10.0-SNAPSHOT'
+    compile 'co.paralleluniverse:capsule:0.10.0'
     testCompile group: 'junit', name: 'junit', version: '4.10'
 }
 
