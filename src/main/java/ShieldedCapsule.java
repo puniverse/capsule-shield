@@ -9,7 +9,10 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 
 /**
@@ -21,13 +24,15 @@ public class ShieldedCapsule extends Capsule {
      * See:
      * https://www.stgraber.org/2013/12/20/lxc-1-0-blog-post-series/
      * http://man7.org/linux/man-pages/man5/lxc.container.conf.5.html
+     * http://www.linuxcertif.com/man/5/lxc.conf/
+     * https://help.ubuntu.com/lts/serverguide/lxc.html
      * https://wiki.archlinux.org/index.php/Linux_Containers
      * https://github.com/docker/docker/blob/v1.3.1/daemon/execdriver/lxc/lxc_template.go
      * https://github.com/docker/docker/blob/v1.3.1/daemon/execdriver/lxc/driver.go
      * https://github.com/docker/docker/blob/v0.8.1/execdriver/lxc/lxc_template.go
      * https://github.com/docker/docker/blob/v0.4.4/lxc_template.go
      */
-    
+
     private static final String PROP_UNSHIELDED = "capsule.unshield";
 
     private static final String PROP_OS_NAME = "os.name";
@@ -46,11 +51,13 @@ public class ShieldedCapsule extends Capsule {
     private static final String JAR_HOME = "/capsule/jar";
     private static final String CAPSULE_HOME = "/capsule/app";
     private static final String DEP_HOME = "/capsule/deps";
-    private static final String ROOT_HOME = "rootfs";
 
     private final boolean unshielded;
 
     private final Path localRepo;
+    private final boolean chroot = false;
+    private Path root;
+    private Path rootfsMount;
 
     public ShieldedCapsule(Capsule pred) {
         super(pred);
@@ -84,8 +91,9 @@ public class ShieldedCapsule extends Capsule {
             // Use the original ProcessBuilder to create the Dockerfile
             try {
                 final Path confFile = getAppCache().resolve(CONF_FILE);
-                Files.createDirectories(getAppCache().resolve(ROOT_HOME));
                 Files.createDirectories(getAppCache().resolve(LXCPATH));
+                if (chroot)
+                    this.root = createRootDir();
                 writeConfFile(confFile);
 
                 log(LOG_VERBOSE, "Conf file: " + confFile);
@@ -97,12 +105,27 @@ public class ShieldedCapsule extends Capsule {
         final ProcessBuilder pb = super.prelaunch(args);
         pb.command().addAll(0,
                 Arrays.asList("lxc-execute",
+                        "--logfile=lxc.log",
+                        "--logpriority=" + lxcLogLevel(getLogLevel()), // "–l", lxcLogLevel(getLogLevel()),
+                        "-P", getAppCache().resolve(LXCPATH).toString(),
                         "-n", getAppId(),
                         "-f", getAppCache().resolve(CONF_FILE).toString(),
-                        "–l", lxcLogLevel(getLogLevel()),
-                        "-P", getAppCache().resolve(LXCPATH).toString(),
                         "--"));
         return pb;
+    }
+
+    protected Path createRootDir() throws IOException {
+        final Path dir = getAppCache().resolve("rootfs"); // Files.createTempDirectory("lxc-");
+
+        Files.createDirectories(dir);
+        for (String d : Arrays.asList("proc", "sys", "dev"))
+            Files.createDirectory(dir.resolve(d));
+        for (String d : Arrays.asList("pts", "shm", "kmsg"))
+            Files.createDirectory(dir.resolve("dev").resolve(d));
+        for (String dev : Arrays.asList("tty", "console", "tty0", "tty1", "tty5", "ram0", "null", "urandom"))
+            Files.createFile(dir.resolve("dev").resolve(dev));
+
+        return dir;
     }
 
     private void writeConfFile(Path file) throws IOException {
@@ -111,7 +134,7 @@ public class ShieldedCapsule extends Capsule {
         boolean hostNetworking = false;
         boolean network = true;
         boolean privileged = false;
-        boolean tty = true;
+        boolean tty = false;
 
         boolean unprivileged = true;
         int minIdMap = 100000;
@@ -138,14 +161,10 @@ public class ShieldedCapsule extends Capsule {
                 out.println("lxc.network.type = empty\n"
                         + "lxc.network.flags = up");
 
-            // root filesystem
-            // out.println("lxc.rootfs = " + getAppCache().resolve(ROOT_HOME).toString());
-
-            out.println("lxc.pts = 1024"); // use a dedicated pts for the container (and limit the number of pseudo terminal available)
-
             out.println("lxc.console = none"); // disable the main console
             out.println("lxc.tty = 1");        // no controlling tty at all
 
+            // out.println("lxc.pts = 1024"); // use a dedicated pts for the container (and limit the number of pseudo terminal available)
             if (privileged)
                 out.println("lxc.cgroup.devices.allow = a");
             else {
@@ -175,34 +194,43 @@ public class ShieldedCapsule extends Capsule {
                 }
             }
 
-            // standard mount point
-            // Use mnt.putold as per https://bugs.launchpad.net/ubuntu/+source/lxc/+bug/986385
-            out.println("lxc.pivotdir = lxc_putold");
+            out.println("lxc.kmsg = 0");
+            
+            if (root != null) {
+                out.println("lxc.rootfs = " + root); // root filesystem
 
-            // These mounts must be applied within the namespace
-            // WARNING: mounting procfs and/or sysfs read-write is a known attack vector.
-            // See e.g. http://blog.zx2c4.com/749 and http://bit.ly/T9CkqJ
-            out.println("lxc.mount.entry = proc /proc proc ro,nosuid,nodev,noexec 0 0");
-            out.println("lxc.mount.entry = sysfs /sys sysfs ro,nosuid,nodev,noexec 0 0");
-            out.println("lxc.mount.entry = devpts /dev/pts devpts newinstance,ptmxmode=0666,nosuid,noexec 0 0");
-            out.println("lxc.mount.entry = shm /dev/shm tmpfs size=65536k,nosuid,nodev,noexec 0 0");
-            if (tty)
-                out.println("lxc.mount.entry = dev/console /dev/console none bind,rw 0 0");
+                rootfsMount = Files.createTempDirectory("lxc-");
+                out.println("lxc.rootfs.mount = " + rootfsMount);
 
-            out.println("lxc.mount.entry = " + JAVA_HOME + " " + getJavaHome() + " none ro,bind 0 0");
-            out.println("lxc.mount.entry = " + JAR_HOME + " " + getJarFile().getParent() + " none ro,bind 0 0");
-            out.println("lxc.mount.entry = " + CAPSULE_HOME + " " + getAppCache() + " none ro,bind 0 0");
-            out.println("lxc.mount.entry = " + DEP_HOME + " " + getAppCache() + " none ro,bind 0 0");
+                // Use mnt.putold as per https://bugs.launchpad.net/ubuntu/+source/lxc/+bug/986385
+                // out.println("lxc.pivotdir = mnt.putold"); // mnt.putold
+
+                // WARNING: mounting procfs and/or sysfs read-write is a known attack vector.
+                // See e.g. http://blog.zx2c4.com/749 and http://bit.ly/T9CkqJ
+//                out.println("lxc.mount.entry = proc /proc proc nosuid,nodev,noexec 0 0");
+                out.println("lxc.mount.entry = sysfs /sys sysfs nosuid,nodev,noexec 0 0");
+                out.println("lxc.mount.entry = dev/pts /dev/pts devpts newinstance,ptmxmode=0666,nosuid,noexec 0 0");
+                out.println("lxc.mount.entry = shm /dev/shm tmpfs size=65536k,nosuid,nodev,noexec 0 0");
+                if (tty)
+                    out.println("lxc.mount.entry = dev/console /dev/console none bind,rw 0 0");
+
+                out.println("lxc.mount.entry = " + getJavaHome() + " " + JAVA_HOME + " none ro,bind 0 0");
+                out.println("lxc.mount.entry = " + getJarFile().getParent() + " " + JAR_HOME + " none ro,bind 0 0");
+                out.println("lxc.mount.entry = " + getAppCache() + " " + CAPSULE_HOME + " none ro,bind 0 0");
+                out.println("lxc.mount.entry = " + getAppCache() + " " + DEP_HOME + " none ro,bind 0 0");
+            }
 
             if (privileged)
                 out.println("lxc.aa_profile = unconfined");
             // else
             //    out.println("lxc.aa_profile = lxc-container-default-with-mounting");
 
+            out.println("lxc.seccomp = /usr/share/lxc/config/common.seccomp"); // Blacklist some syscalls which are not safe in privileged containers
+
             // see: http://man7.org/linux/man-pages/man7/capabilities.7.html
-            // out.println("lxc.cap.drop = audit_control audit_write mac_admin mac_override mknod setfcap setpcap sys_admin sys_boot sys_module sys_nice sys_pacct sys_rawio sys_resource sys_time sys_tty_config");
-            out.println("lxc.cap.keep = audit_read block_suspend chown dac_override dac_read_search fowner fsetid ipc_lock ipc_owner "
-                    + "kill lease linux_immutable net_admin net_bind_service net_broadcast net_raw setgid setuid sys_chroot sys_ptrace syslog");
+            out.println("lxc.cap.drop = audit_control audit_write mac_admin mac_override mknod setfcap setpcap sys_boot sys_module sys_nice sys_pacct sys_rawio sys_resource sys_time sys_tty_config");
+            // out.println("lxc.cap.keep = audit_read block_suspend chown dac_override dac_read_search fowner fsetid ipc_lock ipc_owner "
+            //        + "kill lease linux_immutable net_admin net_bind_service net_broadcast net_raw setgid setuid sys_chroot sys_ptrace syslog");
 
             // limits
             if (hasAttribute(ATTR_MEMORY_LIMIT)) {
@@ -213,6 +241,21 @@ public class ShieldedCapsule extends Capsule {
             }
             if (hasAttribute(ATTR_CPUS))
                 out.println("lxc.cgroup.cpu.shares = " + getAttribute(ATTR_CPUS));
+        }
+    }
+
+    @Override
+    @SuppressWarnings("CallToPrintStackTrace")
+    protected void cleanup() {
+        super.cleanup();
+
+        try {
+            if (root != null && !root.startsWith(getAppCache()))
+                delete(root);
+            if (rootfsMount != null)
+                delete(rootfsMount);
+        } catch (Throwable t) {
+            t.printStackTrace();
         }
     }
 
@@ -263,6 +306,9 @@ public class ShieldedCapsule extends Capsule {
     private String move(Path p) {
         if (p == null)
             return null;
+        if (root == null)
+            return p.toString();
+
         p = p.normalize().toAbsolutePath();
         if (p.equals(getJavaExecutable().toAbsolutePath()))
             return getJavaExecutable().toString();
