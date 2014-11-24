@@ -31,6 +31,7 @@ public class ShieldedCapsule extends Capsule {
      * https://github.com/docker/docker/blob/v1.3.1/daemon/execdriver/lxc/driver.go
      * https://github.com/docker/docker/blob/v0.8.1/execdriver/lxc/lxc_template.go
      * https://github.com/docker/docker/blob/v0.4.4/lxc_template.go
+     * https://docs.oracle.com/cd/E37670_01/E37355/html/ol_app_containers.html
      */
 
     private static final String PROP_UNSHIELDED = "capsule.unshield";
@@ -228,6 +229,7 @@ public class ShieldedCapsule extends Capsule {
             out.println("lxc.seccomp = /usr/share/lxc/config/common.seccomp"); // Blacklist some syscalls which are not safe in privileged containers
 
             // see: http://man7.org/linux/man-pages/man7/capabilities.7.html
+            // see http://osdir.com/ml/lxc-chroot-linux-containers/2011-08/msg00117.html about the sys_admin capability
             out.println("lxc.cap.drop = audit_control audit_write mac_admin mac_override mknod setfcap setpcap sys_boot sys_module sys_nice sys_pacct sys_rawio sys_resource sys_time sys_tty_config");
             // out.println("lxc.cap.keep = audit_read block_suspend chown dac_override dac_read_search fowner fsetid ipc_lock ipc_owner "
             //        + "kill lease linux_immutable net_admin net_bind_service net_broadcast net_raw setgid setuid sys_chroot sys_ptrace syslog");

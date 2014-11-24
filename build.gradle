@@ -20,7 +20,12 @@ ext.scmUrl          = "https://github.com/puniverse/${project.name}"
 ext.scmConnection   = "https://github.com/puniverse/${project.name}.git"
 ext.distDir         = "$buildDir/dist"
 ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
-    
+
+if (!project.hasProperty("sonatypeUsername") || !project.hasProperty("sonatypePassword")) {
+    ext.sonatypeUsername = ""
+    ext.sonatypePassword = ""
+}
+
 repositories {
     mavenLocal()
     mavenCentral()
