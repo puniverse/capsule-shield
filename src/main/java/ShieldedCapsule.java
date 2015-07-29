@@ -301,7 +301,7 @@ public class ShieldedCapsule extends Capsule {
             case LOG_VERBOSE:
                 return "INFO";
             case LOG_DEBUG:
-                return "TRACE";
+                return "DEBUG";
             default:
                 throw new IllegalArgumentException("Unrecognized log level: " + loglevel);
         }
