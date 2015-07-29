@@ -78,7 +78,7 @@ public class ShieldedCapsule extends Capsule {
     private final boolean unshielded;
 
     private Path origJavaHome;
-    private final Path localRepo;
+    private Path localRepo;
     private final boolean chroot = true;
     private Path root;
 
@@ -94,8 +94,6 @@ public class ShieldedCapsule extends Capsule {
                 throw new RuntimeException("Unsupported environment: lxc not found"
                         + " Run with -D" + PROP_UNSHIELDED + " to run unshielded");
         }
-
-        this.localRepo = getLocalRepo();
     }
 
     private boolean needsBuild() {
@@ -119,6 +117,9 @@ public class ShieldedCapsule extends Capsule {
 
     @Override
     protected final ProcessBuilder prelaunch(List<String> jvmArgs, List<String> args) {
+        this.localRepo = getLocalRepo();
+
+
         if (needsBuild()) {
             log(LOG_VERBOSE, "Writing LXC configuration");
             // Use the original ProcessBuilder to create the Dockerfile
