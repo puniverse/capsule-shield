@@ -1,15 +1,25 @@
-#!/bin/sh
+#!/bin/bash
+
+#
+# Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.
+#
+# This program and the accompanying materials are licensed under the terms
+# of the Eclipse Public License v1.0, available at
+# http://www.eclipse.org/legal/epl-v10.html
+#
 
 # Client script for LXC container capsuleos image.
 #
-# Copyright © 2015 Parallel Universe
+# @author circlespainter
 
+## Failfast
 set -eu
 
+## Vars to be populated from options
 FILE=
 LXC_ROOTFS=
 
-# Define path
+## Define path
 export PATH=$PATH:/usr/sbin:/usr/bin:/sbin:/bin
 
 cleanup() {
@@ -33,13 +43,15 @@ EOF
     return 0
 }
 
+# Get inputs
+
 options=$(getopt -l file:,name:,path:,rootfs:,mapped-uid:,mapped-gid: -- "$@")
 
 if [ $? -ne 0 ]; then
     usage
     exit 1
 fi
-eval set -- "$options"
+eval set -- "${options}"
 
 while :; do
     case "$1" in
@@ -56,13 +68,15 @@ done
 
 options=$(getopt -l name:,mapped-uid:,mapped-gid:,file:,rootfs: -- "$@")
 
+# Check inputs
+
 if [ $? -ne 0 ]; then
     usage
     exit 1
 fi
-eval set -- "$options"
+eval set -- "${options}"
 
-# Check for required binaries
+## Check for required binaries
 for bin in tar; do
     if ! type $bin >/dev/null 2>&1; then
         echo "ERROR: Missing required tool: $bin" 1>&2
@@ -70,9 +84,7 @@ for bin in tar; do
     fi
 done
 
-echo $LXC_ROOTFS
-
-# Check that we have all variables we need
+## Check that we have all variables we need
 if [ -z "$LXC_ROOTFS" ]; then
     echo "ERROR: Not running through LXC." 1>&2
     exit 1
