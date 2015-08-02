@@ -60,19 +60,19 @@ public class ShieldedCapsule extends Capsule {
 
 	private static final String PROP_OS_NAME = "os.name";
 
-	private static final Entry<String, List<String>> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_LIST(T_STRING()), null, true, "");
-	private static final Entry<String, Long> ATTR_CPUS = ATTRIBUTE("CPU-Shares", T_LONG(), null, true, "");
-	private static final Entry<String, Long> ATTR_MEMORY_LIMIT = ATTRIBUTE("Memory-Limit", T_LONG(), null, true, "");
-
-	private static final Entry<String, String> ATTR_LXC_ROOT = ATTRIBUTE("LXC-Dir", T_STRING(), "/usr/share/lxc", true, "");
-	private static final Entry<String, Boolean> ATTR_PRIVILEGED = ATTRIBUTE("LXC-Home", T_BOOL(), false, true, "");
-	private static final Entry<String, Boolean> ATTR_NETWORK = ATTRIBUTE("Network", T_BOOL(), true, true, "");
+	private static final Entry<String, String> LXC_SYSDIR_SHARE = ATTRIBUTE("LXC-SysDir-Share", T_STRING(), "/usr/share/lxc", true, "");
+	private static final Entry<String, Boolean> ATTR_PRIVILEGED = ATTRIBUTE("Privileged", T_BOOL(), false, true, "");
+	private static final Entry<String, Boolean> ATTR_FULL_NETWORKING = ATTRIBUTE("Full-Networking", T_BOOL(), true, true, "");
 	private static final Entry<String, String> ATTR_NETWORK_BRIDGE = ATTRIBUTE("Network-Bridge", T_STRING(), "lxcbr0", true, "");
 	private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, "");
-	private static final Entry<String, Boolean> ATTR_HOST_NETWORKING = ATTRIBUTE("Host-Networking", T_BOOL(), false, true, "");
+	private static final Entry<String, Boolean> ATTR_HOST_ONLY_NETWORKING = ATTRIBUTE("Host-Only-Networking", T_BOOL(), false, true, "");
 	private static final Entry<String, Boolean> ATTR_TTY = ATTRIBUTE("TTY", T_BOOL(), false, true, "");
 	private static final Entry<String, Long> ATTR_ID_MAP_START = ATTRIBUTE("ID-Map-Start", T_LONG(), 100000l, true, "");
 	private static final Entry<String, Long> ATTR_ID_MAP_SIZE = ATTRIBUTE("ID-Map-Size", T_LONG(), 65536l, true, "");
+
+	private static final Entry<String, List<String>> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_LIST(T_STRING()), null, true, "");
+	private static final Entry<String, Long> ATTR_CPUS = ATTRIBUTE("CPU-Shares", T_LONG(), null, true, "");
+	private static final Entry<String, Long> ATTR_MEMORY_LIMIT = ATTRIBUTE("Memory-Limit", T_LONG(), null, true, "");
 
 	private static final String CONF_FILE = "capsule-shield-lxc.conf";
 	private static final String LXC_LOCAL_PATH = "lxc";
@@ -179,12 +179,12 @@ public class ShieldedCapsule extends Capsule {
 
 		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(file, StandardOpenOption.APPEND))) {
 
-			final String lxcConfig = getAttribute(ATTR_LXC_ROOT) + "/config";
+			final String lxcConfig = getAttribute(LXC_SYSDIR_SHARE) + "/config";
 			final boolean privileged = getAttribute(ATTR_PRIVILEGED);
-			final boolean network = getAttribute(ATTR_NETWORK);
+			final boolean network = getAttribute(ATTR_FULL_NETWORKING);
 			final String hostname = getAttribute(ATTR_HOSTNAME);
 			final String networkBridge = getAttribute(ATTR_NETWORK_BRIDGE);
-			final boolean hostNetworking = getAttribute(ATTR_HOST_NETWORKING);
+			final boolean hostNetworking = getAttribute(ATTR_HOST_ONLY_NETWORKING);
 			final boolean tty = getAttribute(ATTR_TTY);
 			final int minIdMap = getAttribute(ATTR_ID_MAP_START).intValue();
 			final int sizeIdMap = getAttribute(ATTR_ID_MAP_SIZE).intValue();
