@@ -45,7 +45,7 @@ EOF
 
 # Get inputs
 
-options=$(getopt -l file:,name:,path:,rootfs:,mapped-uid:,mapped-gid: -- "$@")
+options=$(getopt -o h -l file:,name:,path:,rootfs:,mapped-uid:,mapped-gid: -- "$@")
 
 if [ $? -ne 0 ]; then
     usage
