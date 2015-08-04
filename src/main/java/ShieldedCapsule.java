@@ -11,6 +11,7 @@ import java.lang.reflect.AccessibleObject;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -53,6 +54,8 @@ public class ShieldedCapsule extends Capsule {
      * https://github.com/p8952/bocker
      */
 
+	private static final String SEP = File.separator;
+
 	private static final String PROP_UNSHIELDED = "capsule.unshield";
 
 	private static final String PROP_JAVA_VERSION = "java.version";
@@ -60,33 +63,36 @@ public class ShieldedCapsule extends Capsule {
 
 	private static final String PROP_OS_NAME = "os.name";
 
-	private static final Entry<String, String> LXC_SYSDIR_SHARE = ATTRIBUTE("LXC-SysDir-Share", T_STRING(), "/usr/share/lxc", true, "");
+	private static final Entry<String, String> LXC_SYSDIR_SHARE = ATTRIBUTE("LXC-SysDir-Share", T_STRING(), SEP + "usr" + SEP + "share" + SEP + "lxc", true, "");
 	private static final Entry<String, Boolean> ATTR_PRIVILEGED = ATTRIBUTE("Privileged", T_BOOL(), false, true, "");
 	private static final Entry<String, Boolean> ATTR_FULL_NETWORKING = ATTRIBUTE("Full-Networking", T_BOOL(), true, true, "");
 	private static final Entry<String, String> ATTR_NETWORK_BRIDGE = ATTRIBUTE("Network-Bridge", T_STRING(), "lxcbr0", true, "");
 	private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, "");
 	private static final Entry<String, Boolean> ATTR_HOST_ONLY_NETWORKING = ATTRIBUTE("Host-Only-Networking", T_BOOL(), false, true, "");
 	private static final Entry<String, Boolean> ATTR_TTY = ATTRIBUTE("TTY", T_BOOL(), false, true, "");
-	private static final Entry<String, Long> ATTR_ID_MAP_START = ATTRIBUTE("ID-Map-Start", T_LONG(), 100000l, true, "");
-	private static final Entry<String, Long> ATTR_ID_MAP_SIZE = ATTRIBUTE("ID-Map-Size", T_LONG(), 65536l, true, "");
+	private static final Entry<String, Long> ATTR_UID_MAP_START = ATTRIBUTE("UID-Map-Start", T_LONG(), 100000l, true, "");
+	private static final Entry<String, Long> ATTR_UID_MAP_SIZE = ATTRIBUTE("UID-Map-Size", T_LONG(), 65536l, true, "");
+	private static final Entry<String, Long> ATTR_GID_MAP_START = ATTRIBUTE("GID-Map-Start", T_LONG(), 100000l, true, "");
+	private static final Entry<String, Long> ATTR_GID_MAP_SIZE = ATTRIBUTE("GID-Map-Size", T_LONG(), 65536l, true, "");
 
 	private static final Entry<String, List<String>> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_LIST(T_STRING()), null, true, "");
 	private static final Entry<String, Long> ATTR_CPUS = ATTRIBUTE("CPU-Shares", T_LONG(), null, true, "");
 	private static final Entry<String, Long> ATTR_MEMORY_LIMIT = ATTRIBUTE("Memory-Limit", T_LONG(), null, true, "");
 
-	private static final String CONF_FILE = "capsule-shield-lxc.conf";
-	private static final String LXC_LOCAL_PATH = "lxc";
+	private static final String CONTAINER_NAME = "lxc";
+	private static final String HOST_APPCACHE_RELATIVE_CONTAINER_DIR_PARENT = "capsule-shield";
+	private static final String HOST_APPCACHE_RELATIVE_CONTAINER_DIR = HOST_APPCACHE_RELATIVE_CONTAINER_DIR_PARENT + SEP + CONTAINER_NAME;
 
-	private static final Path JAVA_HOME = Paths.get("/java");
-	private static final Path JAR_HOME = Paths.get("/capsule/jar");
-	private static final Path WRAPPER_HOME = Paths.get("/capsule/wrapper");
-	private static final Path CAPSULE_HOME = Paths.get("/capsule/app");
-	private static final Path DEP_HOME = Paths.get("/capsule/deps");
+	private static final Path CONTAINER_ABSOLUTE_JAVA_HOME = Paths.get(SEP + "java");
+	private static final Path CONTAINER_ABSOLUTE_JAR_HOME = Paths.get(SEP + "capsule" + SEP + "jar");
+	private static final Path CONTAINER_ABSOLUTE_WRAPPER_HOME = Paths.get(SEP + "capsule" + SEP + "wrapper");
+	private static final Path CONTAINER_ABSOLUTE_CAPSULE_HOME = Paths.get(SEP + "capsule" + SEP + "app");
+	private static final Path CONTAINER_ABSOLUTE_DEP_HOME = Paths.get(SEP + "capsule" + SEP + "deps");
 
-	private static Path OWN_JAR_FILE;
-	private static String DISTRO_TYPE;
-	private static Path LXC_PATH;
-	private static Boolean LXC_INSTALLED;
+	private static String distroType;
+	private static Boolean isLXCInstalled;
+	private static Path hostAbsoluteContainerDir;
+	private static Path hostAbsoluteOwnJarFile;
 
 	private Path origJavaHome;
 	private Path localRepo;
@@ -99,7 +105,7 @@ public class ShieldedCapsule extends Capsule {
 			if (!isLinux())
 				throw new RuntimeException("Unsupported environment: Currently shielded capsules are only supported on linux."
 					+ " Run with -D" + PROP_UNSHIELDED + " to run unshielded");
-			if (!isLxcInstalled())
+			if (!isLXCInstalled())
 				throw new RuntimeException("Unsupported environment: lxc not found"
 					+ " Run with -D" + PROP_UNSHIELDED + " to run unshielded");
 		}
@@ -120,17 +126,16 @@ public class ShieldedCapsule extends Capsule {
 		pb.command().addAll(0,
 			Arrays.asList("lxc-execute",
 				"--logfile=lxc.log",
-				"--logpriority=" + lxcLogLevel(getLogLevel()), // "–l", lxcLogLevel(getLogLevel()),
-				"-P", getWritableAppCache().resolve(LXC_LOCAL_PATH).toString(),
-				"-n", getAppId(),
+				"--logpriority=" + lxcLogLevel(getLogLevel()),
+				"-P", getContainerParentDir().toString(),
+				"-n", CONTAINER_NAME,
 				"--",
 				"/networked"));
 		return pb;
 	}
 
 	private boolean isBuildNeeded() {
-		final Path confFile = getLXCDir().resolve(getAppId()).resolve("config");
-		if (!Files.exists(confFile))
+		if (!Files.exists(getConfFile()))
 			return true;
 		try {
 			FileTime jarTime = Files.getLastModifiedTime(getJarFile());
@@ -140,7 +145,7 @@ public class ShieldedCapsule extends Capsule {
 					jarTime = wrapperTime;
 			}
 
-			final FileTime confTime = Files.getLastModifiedTime(confFile);
+			final FileTime confTime = Files.getLastModifiedTime(getConfFile());
 			return confTime.compareTo(jarTime) < 0;
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -149,67 +154,200 @@ public class ShieldedCapsule extends Capsule {
 
 	private void createContainer() throws IOException, InterruptedException {
 		if (isThereSuchContainerAlready()) // Destroy container
-			exec("lxc-destroy", "-n", getAppId(), "-P", getLXCDir().toString());
+			exec("lxc-destroy", "-n", CONTAINER_NAME , "-P", getContainerParentDir().toString());
+
+		getWritableAppCache(); // Re-creates app cache dir if needed
 
 		log(LOG_VERBOSE, "Writing LXC configuration");
-		final Path confFile = getWritableAppCache().resolve(CONF_FILE);
-		writeConfFile(confFile);
-		log(LOG_VERBOSE, "Conf file: " + confFile);
+		writeConfFile();
+		log(LOG_VERBOSE, "Written conf file: " + getConfFile());
 
-		log(LOG_VERBOSE, "Writing temporary container creation script");
-		final Path tmpContainerScript = addTempFile(Files.createTempFile("tmp-capsule-shield-lxc-template-script-", ".sh", PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"))));
-		dumpResourceTo("META-INF/lxc/capsule-shield-lxc-template-script.sh", tmpContainerScript);
-		log(LOG_VERBOSE, "Temporary container creation script: " + tmpContainerScript);
+		log(LOG_VERBOSE, "Creating rootfs");
+		createRootFS();
+		log(LOG_VERBOSE, "Rootfs created at: " + getRootFSDir());
+	}
 
-		log(LOG_VERBOSE, "Writing temporary root dir tgz");
-		final Path tmpRootTgz = addTempFile(Files.createTempFile("tmp-capsule-shield-lxc-rootfs-", ".tgz"));
-		dumpResourceTo("META-INF/lxc/capsule-shield-lxc-rootfs.tgz", tmpRootTgz);
-		log(LOG_VERBOSE, "Temporary root dir tgz: " + tmpRootTgz);
+	private void createRootFS() throws IOException, InterruptedException {
+		createRootFSLayout();
+		chownRootFS();
+	}
 
-		// Creation
-		exec(1, "lxc-create", "-n", getAppId(), "-t", tmpContainerScript.toString(), "-f", confFile.toString(), "-P", getWritableAppCache().resolve(LXC_LOCAL_PATH).toString(), "--", "--file", tmpRootTgz.toString());
+	private void createRootFSLayout() throws IOException {
+		final Path ret = getRootFSDir();
+
+		Files.createDirectories(ret.resolve("bin"));
+
+		final Path capsule = ret.resolve("capsule");
+		Files.createDirectories(capsule.resolve("app"));
+		Files.createDirectory(capsule.resolve("deps"));
+		Files.createDirectory(capsule.resolve("jar"));
+		Files.createDirectory(capsule.resolve("wrapper"));
+
+		final Path run = ret.resolve("run");
+		Files.createDirectories(run.resolve("network"));
+		Files.createDirectories(run.resolve("resolveconf").resolve("interface"));
+		Files.createDirectory(run.resolve("lock"));
+		exec("chmod", "+t", run.resolve("lock").toAbsolutePath().normalize().toString());
+		Files.createDirectory(run.resolve("shm"));
+		exec("chmod", "+t", run.resolve("shm").toAbsolutePath().normalize().toString());
+
+		final Path dev = ret.resolve("dev");
+		Files.createDirectories(dev.resolve("mqueue"));
+		Files.createDirectory(dev.resolve("pts"));
+		Files.createSymbolicLink(dev.resolve("shm"), dev.relativize(run.resolve("shm")));
+
+		final Path var = ret.resolve("var");
+		Files.createDirectory(var);
+		Files.createSymbolicLink(var.resolve("run"), var.relativize(run));
+
+		final Path etc = ret.resolve("etc");
+		Files.createDirectory(etc);
+		Files.createFile(etc.resolve("fstab"));
+		Files.createDirectory(etc.resolve("dhcp"));
+		final Path dhclientconf = etc.resolve("dhcp").resolve("dhclient.conf");
+		// TODO Check if enough for networking to work
+		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(dhclientconf, StandardOpenOption.CREATE))) {
+			out.println("option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;");
+			out.println("send host-name = gethostname();");
+			out.println("request subnet-mask, broadcast-address, time-offset, routers,\n" +
+				"        domain-name, domain-name-servers, domain-search, host-name,\n" +
+				"        dhcp6.name-servers, dhcp6.domain-search,\n" +
+				"        netbios-name-servers, netbios-scope, interface-mtu,\n" +
+				"        rfc3442-classless-static-routes, ntp-servers,\n" +
+				"        dhcp6.fqdn, dhcp6.sntp-servers;");
+		}
+
+		Files.createDirectory(ret.resolve("java"));
+		Files.createDirectory(ret.resolve("lib"));
+		Files.createDirectory(ret.resolve("lib64"));
+		Files.createDirectory(ret.resolve("proc"));
+		Files.createDirectory(ret.resolve("sbin"));
+		Files.createDirectory(ret.resolve("sys"));
+		Files.createDirectory(ret.resolve("usr"));
+
+		Path tmp = ret.resolve("tmp");
+		Files.createDirectory(tmp);
+		exec("chmod", "+t", tmp.toAbsolutePath().normalize().toString());
+
+		final Path networked = ret.resolve("networked");
+		Files.createFile(networked, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxrwxr-x")));
+		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(networked, StandardOpenOption.APPEND))) {
+			out.println (
+				"#!/bin/bash\n" +
+				"\n" +
+				"#\n" +
+				"# Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.\n" +
+				"#\n" +
+				"# This program and the accompanying materials are licensed under the terms\n" +
+				"# of the Eclipse Public License v1.0, available at\n" +
+				"# http://www.eclipse.org/legal/epl-v10.html\n" +
+				"#\n" +
+				"\n" +
+				"# Execute a command with networking enabled.\n" +
+				"#\n" +
+				"# @author circlespainter\n" +
+				"\n" +
+				"/sbin/ifconfig lo 127.0.0.1\n" +
+				"/sbin/route add -net 127.0.0.0 netmask 255.0.0.0 lo\n" +
+				"/sbin/dhclient\n" +
+				"export JAVA_HOME=/java\n" +
+				"\"$@\"\n" +
+				"RET=$?\n" +
+				"if [ -f \"/run/dhclient.pid\" ]; then\n" +
+				"    DHCLIENT_PID=`/bin/cat /run/dhclient.pid`;\n" +
+				"    if [ -n $DHCLIENT_PID ]; then\n" +
+				"        /bin/kill `/bin/cat /run/dhclient.pid`;\n" +
+				"    fi\n" +
+				"fi\n" +
+				"exit $RET\n"
+			);
+		}
+	}
+
+	/**
+	 * {@see https://github.com/lxc/lxc/blob/31a882ef3a5e35ae891d76adc0351bad0f2540f2/src/lxc/conf.c#L3403}
+	 */
+	private void chownRootFS() throws IOException, InterruptedException {
+		// TODO Check if correct
+		final Long uidMapStart = getAttribute(ATTR_UID_MAP_START);
+		final Long gidMapStart = getAttribute(ATTR_GID_MAP_START);
+
+		final Long currentUID = getCurrentUID();
+		final Long currentGID = getCurrentGID();
+
+		final String meAsNSRootUIDMap = "u:0:" + currentUID + ":1";
+		final String meAsNSRootGIDMap = "g:0:" + currentGID + ":1";
+
+		final String nsRootAs1UIDMap = "u:1:" + uidMapStart + ":1";
+		final String nsRootAs1GIDMap = "g:1:" + gidMapStart + ":1";
+
+		exec("lxc-usernsexec", "-m", meAsNSRootUIDMap, "-m", meAsNSRootGIDMap, "-m", nsRootAs1UIDMap, "-m", nsRootAs1GIDMap, "--", "chown", "-R", "1:1", getRootFSDir().toString());
 	}
 
 	private boolean isThereSuchContainerAlready() throws IOException, InterruptedException {
-		return new ProcessBuilder("lxc-info", "-n", getAppId(), "-P", getLXCDir().toString()).start().waitFor() == 0;
+		return new ProcessBuilder("lxc-info", "-n", CONTAINER_NAME, "-P", getContainerParentDir().toString()).start().waitFor() == 0;
 	}
 
-	private void writeConfFile(Path file) throws IOException {
-		dumpResourceTo("META-INF/lxc/capsule-shield-lxc.conf", file);
+	private void writeConfFile() throws IOException {
+		Files.createDirectories(getContainerDir());
 
-		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(file, StandardOpenOption.APPEND))) {
+		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(getConfFile(), StandardOpenOption.CREATE))) {
 
-			final String lxcConfig = getAttribute(LXC_SYSDIR_SHARE) + "/config";
+			final String lxcConfig = getAttribute(LXC_SYSDIR_SHARE) + SEP + "config";
 			final boolean privileged = getAttribute(ATTR_PRIVILEGED);
 			final boolean network = getAttribute(ATTR_FULL_NETWORKING);
 			final String hostname = getAttribute(ATTR_HOSTNAME);
 			final String networkBridge = getAttribute(ATTR_NETWORK_BRIDGE);
 			final boolean hostNetworking = getAttribute(ATTR_HOST_ONLY_NETWORKING);
 			final boolean tty = getAttribute(ATTR_TTY);
-			final int minIdMap = getAttribute(ATTR_ID_MAP_START).intValue();
-			final int sizeIdMap = getAttribute(ATTR_ID_MAP_SIZE).intValue();
+			final int minUidMap = getAttribute(ATTR_UID_MAP_START).intValue();
+			final int sizeUidMap = getAttribute(ATTR_UID_MAP_SIZE).intValue();
+			final int minGidMap = getAttribute(ATTR_GID_MAP_START).intValue();
+			final int sizeGidMap = getAttribute(ATTR_GID_MAP_SIZE).intValue();
 
+			// System mounts
+			out.println("#\n" +
+				"# Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.\n" +
+				"#\n" +
+				"# This program and the accompanying materials are licensed under the terms\n" +
+				"# of the Eclipse Public License v1.0, available at\n" +
+				"# http://www.eclipse.org/legal/epl-v10.html\n" +
+				"#\n" +
+				"\n" +
+				"# Container configuration file\n" +
+				"#\n" +
+				"# @author circlespainter\n");
+
+			// Distro includes
 			out.println("\n## Distro includes");
-			out.println("lxc.include = " + lxcConfig + "/" + getDistroType() + ".common.conf");
-			out.println("lxc.include = " + lxcConfig + "/" + getDistroType() + ".userns.conf");
+			out.println("lxc.include = " + lxcConfig + SEP + getDistroType() + ".common.conf");
+			out.println("lxc.include = " + lxcConfig + SEP + getDistroType() + ".userns.conf");
 
 			// User map
 			if (!privileged) {
 				out.println("\n## Unprivileged container user map");
-				out.println("lxc.id_map = u 0 " + minIdMap + " " + sizeIdMap + "\n"
-						+ "lxc.id_map = g 0 " + minIdMap + " " + sizeIdMap);
+				out.println("lxc.id_map = u 0 " + minUidMap + " " + sizeUidMap + "\n"
+					+ "lxc.id_map = g 0 " + minGidMap + " " + sizeGidMap);
 			}
+
+			// System mounts
+			out.println("\n## System mounts\n" +
+				"lxc.mount.entry = " + SEP + "sbin sbin none bind 0 0\n" +
+				"lxc.mount.entry = " + SEP + "usr usr none bind 0 0\n" +
+				"lxc.mount.entry = " + SEP + "bin bin none bind 0 0\n" +
+				"lxc.mount.entry = " + SEP + "lib lib none bind 0 0\n" +
+				"lxc.mount.entry = " + SEP + "lib64 lib64 none bind 0 0\n");
 
 			// Capsule mounts
 			out.println("\n## Capsule mounts");
 			getJavaHome(); // Find suitable Java
-			out.println("lxc.mount.entry = " + origJavaHome + " " + JAVA_HOME.toString().substring(1) + " none ro,bind 0 0");
-			out.println("lxc.mount.entry = " + getJarFile().getParent() + " " + JAR_HOME.toString().substring(1) + " none ro,bind 0 0");
+			out.println("lxc.mount.entry = " + origJavaHome + " " + CONTAINER_ABSOLUTE_JAVA_HOME.toString().substring(1) + " none ro,bind 0 0");
+			out.println("lxc.mount.entry = " + getJarFile().getParent() + " " + CONTAINER_ABSOLUTE_JAR_HOME.toString().substring(1) + " none ro,bind 0 0");
 			if (isWrapperCapsule())
-				out.println("lxc.mount.entry = " + findOwnJarFile().getParent() + " " + WRAPPER_HOME.toString().substring(1) + " none ro,bind 0 0");
-			out.println("lxc.mount.entry = " + appDir() + " " + CAPSULE_HOME.toString().substring(1) + " none ro,bind 0 0");
+				out.println("lxc.mount.entry = " + findOwnJarFile().getParent() + " " + CONTAINER_ABSOLUTE_WRAPPER_HOME.toString().substring(1) + " none ro,bind 0 0");
+			out.println("lxc.mount.entry = " + appDir() + " " + CONTAINER_ABSOLUTE_CAPSULE_HOME.toString().substring(1) + " none ro,bind 0 0");
 			if (localRepo != null)
-				out.println("lxc.mount.entry = " + localRepo + " " + DEP_HOME.toString().substring(1) + " none ro,bind 0 0");
+				out.println("lxc.mount.entry = " + localRepo + " " + CONTAINER_ABSOLUTE_DEP_HOME.toString().substring(1) + " none ro,bind 0 0");
 
 			// Console
 			out.println("\n## Console");
@@ -217,7 +355,7 @@ public class ShieldedCapsule extends Capsule {
 			out.println("lxc.pts = 1024"); // use a dedicated pts for the container (and limit the number of pseudo terminal available)
 			out.println("lxc.tty = 1");        // no controlling tty at all
 			if (tty)
-				out.println("lxc.mount.entry = dev/console /dev/console none bind,rw 0 0");
+				out.println("lxc.mount.entry = dev" + SEP + "console " + SEP + "dev" + SEP + "console none bind,rw 0 0");
 
 			// hostname
 			out.println("\n## Hostname");
@@ -271,7 +409,7 @@ public class ShieldedCapsule extends Capsule {
 
 			// Security
 			out.println("\n## Security");
-			out.println("lxc.seccomp = " + lxcConfig + "/common.seccomp"); // Blacklist some syscalls which are not safe in privileged containers
+			out.println("lxc.seccomp = " + lxcConfig + SEP + "common.seccomp"); // Blacklist some syscalls which are not safe in privileged containers
 
 			// see: http://man7.org/linux/man-pages/man7/capabilities.7.html
 			// see http://osdir.com/ml/lxc-chroot-linux-containers/2011-08/msg00117.html about the sys_admin capability
@@ -291,7 +429,10 @@ public class ShieldedCapsule extends Capsule {
 				out.println("lxc.cgroup.cpu.shares = " + getAttribute(ATTR_CPUS));
 
 			out.println("\n## Misc");
-			out.println("lxc.kmsg = 0"); // Unneeded, http://man7.org/linux/man-pages/man5/lxc.container.conf.5.html
+			out.println("lxc.kmsg = 0"); // kmsg unneeded, http://man7.org/linux/man-pages/man5/lxc.container.conf.5.html
+
+			out.println("\n## Root FS");
+			out.println("lxc.rootfs = " + getRootFSDir());
 		}
 	}
 
@@ -301,7 +442,7 @@ public class ShieldedCapsule extends Capsule {
 		if (res == null)
 			res = entry(getProperty(PROP_JAVA_VERSION), Paths.get(getProperty(PROP_JAVA_HOME)));
 		this.origJavaHome = res.getValue();
-		return entry(res.getKey(), JAVA_HOME);
+		return entry(res.getKey(), CONTAINER_ABSOLUTE_JAVA_HOME);
 	}
 
 	@SuppressWarnings("deprecation")
@@ -328,9 +469,9 @@ public class ShieldedCapsule extends Capsule {
 		if (p.equals(findOwnJarFile()))
 			return moveWrapperFile(p);
 		else if (getAppDir() != null && p.startsWith(getAppDir()))
-			return move(p, getAppDir(), CAPSULE_HOME);
+			return move(p, getAppDir(), CONTAINER_ABSOLUTE_CAPSULE_HOME);
 		else if (localRepo != null && p.startsWith(localRepo))
-			return move(p, localRepo, DEP_HOME);
+			return move(p, localRepo, CONTAINER_ABSOLUTE_DEP_HOME);
 		else if (getPlatformNativeLibraryPath().contains(p))
 			return p;
 		else if (p.startsWith(getJavaHome()))
@@ -340,11 +481,11 @@ public class ShieldedCapsule extends Capsule {
 	}
 
 	private Path moveJarFile(Path p) {
-		return JAR_HOME.resolve(p.getFileName());
+		return CONTAINER_ABSOLUTE_JAR_HOME.resolve(p.getFileName());
 	}
 
 	private Path moveWrapperFile(Path p) {
-		return WRAPPER_HOME.resolve(p.getFileName());
+		return CONTAINER_ABSOLUTE_WRAPPER_HOME.resolve(p.getFileName());
 	}
 
 	private Path getLocalRepo() {
@@ -355,21 +496,6 @@ public class ShieldedCapsule extends Capsule {
 			return (Path) accessible(mavenCaplet.getClass().getDeclaredMethod("getLocalRepo")).invoke(mavenCaplet);
 		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException(e);
-		}
-	}
-
-	private void dumpResourceTo(String resLoc, Path p) throws IOException {
-		try (final InputStream in = this.getClass().getResourceAsStream(resLoc); final OutputStream out = Files.newOutputStream(p)) {
-			if (in == null)
-				throw new RuntimeException("Cannot get resource \"" + resLoc + "\" from Jar file.");
-			if (out == null)
-				throw new RuntimeException("Cannot open resource \"" + p + "\" for write.");
-
-			int readBytes;
-			byte[] buffer = new byte[4096];
-			while ((readBytes = in.read(buffer)) > 0) {
-				out.write(buffer, 0, readBytes);
-			}
 		}
 	}
 
@@ -390,18 +516,18 @@ public class ShieldedCapsule extends Capsule {
 		}
 	}
 
-	private static boolean isLxcInstalled() {
-		if (LXC_INSTALLED == null) {
+	private static boolean isLXCInstalled() {
+		if (isLXCInstalled == null) {
 			try {
 				exec("lxc-checkconfig");
-				return (LXC_INSTALLED = true);
+				return (isLXCInstalled = true);
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			} catch (RuntimeException e) {
-				return (LXC_INSTALLED = false);
+				return (isLXCInstalled = false);
 			}
 		}
-		return LXC_INSTALLED;
+		return isLXCInstalled;
 	}
 
 	private static long getMemorySwap(long maxMem, boolean swap) {
@@ -429,7 +555,7 @@ public class ShieldedCapsule extends Capsule {
 	}
 
 	private static Path findOwnJarFile() {
-		if (OWN_JAR_FILE == null) {
+		if (hostAbsoluteOwnJarFile == null) {
 			final URL url = ShieldedCapsule.class.getClassLoader().getResource(ShieldedCapsule.class.getName().replace('.', '/') + ".class");
 			if (url != null) {
 				if (!"jar".equals(url.getProtocol()))
@@ -440,26 +566,38 @@ public class ShieldedCapsule extends Capsule {
 
 				try {
 					final URI jarUri = new URI(path.substring(0, path.indexOf('!')));
-					OWN_JAR_FILE = Paths.get(jarUri);
+					hostAbsoluteOwnJarFile = Paths.get(jarUri);
 				} catch (URISyntaxException e) {
 					throw new AssertionError(e);
 				}
 			} else
 				throw new RuntimeException("Can't locate capsule's own class");
 		}
-		return OWN_JAR_FILE;
+		return hostAbsoluteOwnJarFile;
 	}
 
 	@SuppressWarnings("deprecation")
-	private Path getLXCDir() {
+	private Path getContainerDir() {
 		// TODO avoid using deprecated
-		if (LXC_PATH == null)
-			LXC_PATH = getCacheDir().resolve("apps").resolve(this.getAppId()).resolve(LXC_LOCAL_PATH).toAbsolutePath().normalize();
-		return LXC_PATH;
+		if (hostAbsoluteContainerDir == null)
+			hostAbsoluteContainerDir = getCacheDir().resolve("apps").resolve(getAppId()).resolve(HOST_APPCACHE_RELATIVE_CONTAINER_DIR).toAbsolutePath().normalize();
+		return hostAbsoluteContainerDir;
+	}
+
+	private Path getContainerParentDir() {
+		return getContainerDir().getParent();
+	}
+
+	private Path getRootFSDir() {
+		return getContainerDir().resolve("rootfs");
+	}
+
+	private Path getConfFile() {
+		return getContainerDir().resolve("config");
 	}
 
 	private static String getDistroType() {
-		if (DISTRO_TYPE == null) {
+		if (distroType == null) {
 			BufferedReader bri = null;
 			try {
 				final Process p = new ProcessBuilder("/bin/sh", "-c", "cat /etc/*-release").start();
@@ -467,7 +605,7 @@ public class ShieldedCapsule extends Capsule {
 				String line;
 				while ((line = bri.readLine()) != null) {
 					if (line.startsWith("ID="))
-						return (DISTRO_TYPE = line.substring(3).trim().toLowerCase());
+						return (distroType = line.substring(3).trim().toLowerCase());
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -478,7 +616,25 @@ public class ShieldedCapsule extends Capsule {
 				} catch (IOException ignored) {}
 			}
 		}
-		return DISTRO_TYPE;
+		return distroType;
+	}
+
+	private static Long getCurrentUID() throws IOException, InterruptedException {
+		return getPosixSubjectID("-u");
+	}
+
+	private static Long getCurrentGID() throws IOException, InterruptedException {
+		return getPosixSubjectID("-g");
+	}
+
+	private static Long getPosixSubjectID(String type) throws IOException, InterruptedException {
+		final ProcessBuilder pb = new ProcessBuilder("id", type);
+		final Process p = pb.start();
+		if (p.waitFor() != 0)
+			throw new RuntimeException("'id " + type + "' exited with non-zero status");
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream(), Charset.defaultCharset()))) {
+			return Long.parseLong(reader.readLine());
+		}
 	}
 	//</editor-fold>
 }
