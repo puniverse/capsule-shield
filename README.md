@@ -1,8 +1,24 @@
 # Capsule Shield
 
-A caplet that launches a [capsule](https://github.com/puniverse/capsule) in a minimal container for segregation purposes (currently only [LXC](https://linuxcontainers.org/))
+A caplet that launches a [capsule](https://github.com/puniverse/capsule) in a minimal container for segregation purposes (currently only [LXC](https://linuxcontainers.org/)).
 
 See [here](https://github.com/puniverse/capsule#what-are-caplets) for more information about caplets.
+
+## Requirements
+
+In addition to [Capsule's](https://github.com/puniverse/capsule):
+
+  * [LXC tools](https://linuxcontainers.org/) correctly installed, including extras for unprivileged support (for Ubuntu see e.g. [here](http://www.unixmen.com/setup-linux-containers-using-lxc-on-ubuntu-15-04/))
+  * Other (rather basic) tools such as `dhclient`, `tar`, `cat`, `sh`, `bash`, `id`, `ifconfig`, `route`, `kill`, `test` correctly installed
+  * Only for unprivileged containers: the regular user running the capsule must have been assigned a range of subordinate uids and gids through e.g. `sudo usermod -v 100000-165536 -w 100000-165536`
+
+## Getting started
+
+The Gradle-style dependency you need to embed in your Capsule JAR, which you can generate with the tool you prefer (including [Capsule plugins for most popular build systems](https://github.com/puniverse/capsule#build-tool-plugins)), is `co.paralleluniverse:capsule-shield:0.1.0-SNAPSHOT`. Also include the caplet class in your Capsule manifest, for example:
+
+~~~
+    Caplets: MavenCapsule ShieldedCapsule
+~~~
 
 The following additional manifest entries can be used to customize the container environment:
 
@@ -18,14 +34,18 @@ The following additional manifest entries can be used to customize the container
     * `Host-Only-Networking`: whether host-only networking will be enabled; this is mutually esclusive with `Network` (default: `false`)
     * `Network-Bridge`: the name of the bridge adapter for networking (default: `lxcbr0`)
 
-  * Valid only for privileged containers
-    * `ID-Map-Start`: the first user ID in an unprivileged container (default: `100000`)
-    * `ID-Map-Size`: the size of the user ID map in an unprivileged container (default: `65536`)
+  * Valid only for privileged containers ([some comprehension of user namespaces and user mappings](https://lwn.net/Articles/532593/) is useful)
+    * `UID-Map-Start`: the first (root) user ID in an unprivileged container (default: `100000`)
+    * `UID-Map-Size`: the size of the consecutive user ID map in an unprivileged container (default: `65536`)
+    * `GID-Map-Start`: the first (root) group ID in an unprivileged container (default: `100000`)
+    * `GID-Map-Size`: the size of the consecutive group ID map in an unprivileged container (default: `65536`)
     * `Allowed-Devices`: a list of additional allowed devices in an unprivileged container (example: `"c 136:* rwm" ""`, default: _none_)
+
+The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule/apps/<app-id>/capsule-shield/lxc` and re-created automatically when needed. Should you want/need, you can destroy it manually with `lxc-destroy -n lxc -P `${HOME}/.capsule/apps/<app-id>/capsule-shield`.
 
 ## License
 
-    Copyright (c) 2014, Parallel Universe Software Co. and Contributors. All rights reserved.
+    Copyright (c) 2014-2015, Parallel Universe Software Co. and Contributors. All rights reserved.
 
     This program and the accompanying materials are licensed under the terms
     of the Eclipse Public License v1.0 as published by the Eclipse Foundation.

@@ -31,6 +31,7 @@ public class ShieldedCapsule extends Capsule {
     /*
      * See:
      *
+     * https://lwn.net/Articles/531114/#series_index
      *
      * http://doger.io/
      *
@@ -205,7 +206,8 @@ public class ShieldedCapsule extends Capsule {
 		Files.createFile(etc.resolve("fstab"));
 		Files.createDirectory(etc.resolve("dhcp"));
 		final Path dhclientconf = etc.resolve("dhcp").resolve("dhclient.conf");
-		// TODO Check if enough for networking to work
+
+		// This seems to be enough for DHCP networking to work
 		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(dhclientconf, StandardOpenOption.CREATE))) {
 			out.println("option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;");
 			out.println("send host-name = gethostname();");
@@ -265,10 +267,9 @@ public class ShieldedCapsule extends Capsule {
 	}
 
 	/**
-	 * {@see https://github.com/lxc/lxc/blob/31a882ef3a5e35ae891d76adc0351bad0f2540f2/src/lxc/conf.c#L3403}
+	 * {@see http://man7.org/linux/man-pages/man1/lxc-usernsexec.1.html}
 	 */
 	private void chownRootFS() throws IOException, InterruptedException {
-		// TODO Check if correct
 		final Long uidMapStart = getAttribute(ATTR_UID_MAP_START);
 		final Long gidMapStart = getAttribute(ATTR_GID_MAP_START);
 
@@ -282,10 +283,6 @@ public class ShieldedCapsule extends Capsule {
 		final String nsRootAs1GIDMap = "g:1:" + gidMapStart + ":1";
 
 		exec("lxc-usernsexec", "-m", meAsNSRootUIDMap, "-m", meAsNSRootGIDMap, "-m", nsRootAs1UIDMap, "-m", nsRootAs1GIDMap, "--", "chown", "-R", "1:1", getRootFSDir().toString());
-	}
-
-	private boolean isThereSuchContainerAlready() throws IOException, InterruptedException {
-		return new ProcessBuilder("lxc-info", "-n", CONTAINER_NAME, "-P", getContainerParentDir().toString()).start().waitFor() == 0;
 	}
 
 	private void writeConfFile() throws IOException {
@@ -436,6 +433,14 @@ public class ShieldedCapsule extends Capsule {
 		}
 	}
 
+	private boolean isThereSuchContainerAlready() throws IOException, InterruptedException {
+		return new ProcessBuilder("lxc-info", "-n", CONTAINER_NAME, "-P", getContainerParentDir().toString()).start().waitFor() == 0;
+	}
+
+	//<editor-fold defaultstate="collapsed" desc="Both capsule- and container-related overrides & utils">
+	/**
+	 * Resolve relative to the container
+	 */
 	@Override
 	protected Entry<String, Path> chooseJavaHome() {
 		Entry<String, Path> res = super.chooseJavaHome();
@@ -445,10 +450,12 @@ public class ShieldedCapsule extends Capsule {
 		return entry(res.getKey(), CONTAINER_ABSOLUTE_JAVA_HOME);
 	}
 
+	/**
+	 * Resolve relative to the container
+	 */
 	@SuppressWarnings("deprecation")
 	@Override
 	protected List<Path> resolve0(Object x) {
-		// TODO Check if possible to remove deprecation
 		if (x instanceof Path && ((Path) x).isAbsolute()) {
 			Path p = (Path) x;
 			p = move(p);
@@ -498,6 +505,7 @@ public class ShieldedCapsule extends Capsule {
 			throw new RuntimeException(e);
 		}
 	}
+	//</editor-fold>
 
 	//<editor-fold defaultstate="collapsed" desc="Platform utils">
 	private static String lxcLogLevel(int loglevel) {
@@ -578,7 +586,6 @@ public class ShieldedCapsule extends Capsule {
 
 	@SuppressWarnings("deprecation")
 	private Path getContainerDir() {
-		// TODO avoid using deprecated
 		if (hostAbsoluteContainerDir == null)
 			hostAbsoluteContainerDir = getCacheDir().resolve("apps").resolve(getAppId()).resolve(HOST_APPCACHE_RELATIVE_CONTAINER_DIR).toAbsolutePath().normalize();
 		return hostAbsoluteContainerDir;
