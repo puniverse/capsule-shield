@@ -154,8 +154,10 @@ public class ShieldedCapsule extends Capsule {
 	}
 
 	private void createContainer() throws IOException, InterruptedException {
-		if (isThereSuchContainerAlready()) // Destroy container
-			exec("lxc-destroy", "-n", CONTAINER_NAME , "-P", getContainerParentDir().toString());
+		if (isThereSuchContainerAlready()) { // Destroy container
+			log(LOG_VERBOSE, "Destroying existing LXC container");
+			exec("lxc-destroy", "-n", CONTAINER_NAME, "-P", getContainerParentDir().toString());
+		}
 
 		getWritableAppCache(); // Re-creates app cache dir if needed
 
@@ -461,7 +463,7 @@ public class ShieldedCapsule extends Capsule {
 			p = move(p);
 			return super.resolve0(p);
 		}
-		return super.resolve0(x); //To change body of generated methods, choose Tools | Templates.
+		return super.resolve0(x);
 	}
 
 	private Path move(Path p) {
