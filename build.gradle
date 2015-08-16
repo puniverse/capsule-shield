@@ -9,7 +9,7 @@ targetCompatibility = '1.7'
 mainClassName = 'Capsule'
 
 group       = "co.paralleluniverse"
-version     = "0.1.0"
+version     = "0.1.0-SNAPSHOT"
 status      = "integration"
 description = "Container Caplet"
 ext.url             = "http://puniverse.github.com/quasar"
@@ -29,11 +29,14 @@ if (!project.hasProperty("sonatypeUsername") || !project.hasProperty("sonatypePa
 repositories {
     mavenLocal()
     mavenCentral()
+    maven {
+        url "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
 }
 
 dependencies {
     compile 'co.paralleluniverse:capsule:1.0-rc2-SNAPSHOT'
-    testCompile group: 'junit', name: 'junit', version: '4.10'
+    testCompile group: 'junit', name: 'junit', version: '4.12'
 }
 
 jar {
