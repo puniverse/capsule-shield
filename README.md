@@ -30,28 +30,26 @@ It can be both run against (or embedded in) plain (e.g. "fat") capsules and [Mav
 
 The following additional manifest entries can be used to customize the container environment:
 
-  * `Privileged`: whether the container will be a privileged one or not; unprivileged containers [^namespaces] are safer (default: `false`)
+  * `Privileged`: whether the container will be a privileged one or not; unprivileged containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/) and are safer (default: `false`).
 
   * Valid for both privileged and unprivileged containers:
-    * `LXC-SysDir-Share`: the location of LXC's system-wide `share` directory (default: `/usr/share/lxc`)
-    * `Memory-Limit`: cgroup memory limit (default: _none_)
-    * `CPU-Shares`: cgroup cpu shares (default: _none_)
-    * `TTY`: whether the console device will be enabled in the container (default: `false`)
-    * `Hostname`: the host name assigned to the container (default: _none_)
-    * `Full-Networking`: whether networking will be enabled (default: `true`)
-    * `Host-Only-Networking`: whether host-only networking will be enabled; this is mutually esclusive with `Network` (default: `false`)
-    * `Network-Bridge`: the name of the bridge adapter for networking (default: `lxcbr0`)
+    * `LXC-SysDir-Share`: the location of LXC's system-wide `share` directory (default: `/usr/share/lxc`).
+    * `Memory-Limit`: cgroup memory limit (default: _none_).
+    * `CPU-Shares`: cgroup cpu shares (default: _none_).
+    * `TTY`: whether the console device will be enabled in the container (default: `false`).
+    * `Hostname`: the host name assigned to the container (default: _none_).
+    * `Full-Networking`: whether networking will be enabled (default: `true`).
+    * `Host-Only-Networking`: whether host-only networking will be enabled; this is mutually esclusive with `Network` (default: `false`).
+    * `Network-Bridge`: the name of the bridge adapter for networking (default: `lxcbr0`).
 
-  * Valid only for privileged containers ([some comprehension of user namespaces and user mappings](https://lwn.net/Articles/532593/) is useful)
+  * Valid only for privileged containers ([some insight about user namespaces and user mappings](https://lwn.net/Articles/532593/) can be useful):
     * `UID-Map-Start`: the first (root) user ID in an unprivileged container (default: `100000`)
     * `UID-Map-Size`: the size of the consecutive user ID map in an unprivileged container (default: `65536`)
     * `GID-Map-Start`: the first (root) group ID in an unprivileged container (default: `100000`)
     * `GID-Map-Size`: the size of the consecutive group ID map in an unprivileged container (default: `65536`)
     * `Allowed-Devices`: a list of additional allowed devices in an unprivileged container (example: `"c 136:* rwm" ""`, default: _none_)
 
-[^namespaces]: Unprivileged Linux Containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/).
-
-The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule/apps/<app-id>/capsule-shield/lxc` and re-created automatically when needed. Should you want/need, you can destroy it manually with `lxc-destroy -n lxc -P `${HOME}/.capsule/apps/<app-id>/capsule-shield`.
+The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule/apps/<app-id>/capsule-shield/lxc` and re-created automatically when needed. Should you want/need, you can destroy it manually with `lxc-destroy -n lxc -P ``${HOME}/.capsule/apps/<app-id>/capsule-shield``.
 
 ## License
 
@@ -61,5 +59,3 @@ The LXC container (both configuration file and a minimal root disk containing mo
     of the Eclipse Public License v1.0 as published by the Eclipse Foundation.
 
         http://www.eclipse.org/legal/epl-v10.html
-
----
