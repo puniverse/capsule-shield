@@ -24,7 +24,7 @@ The Gradle-style dependency you need to embed in your Capsule JAR, which you can
 $ java -Dcapsule.log=verbose -jar capsule-shield-0.1.0.jar my-capsule.jar my-capsule-arg1 ...
 ```
 
-It can be both run against (or embedded in) plain (e.g. "fat") capsules and [Maven-based](https://github.com/puniverse/capsule-desktop) ones.
+It can be both run against (or embedded in) plain (e.g. "fat") capsules and [Maven-based](https://github.com/puniverse/capsule-maven) ones.
 
 ## Additional Capsule manifest entries
 
