@@ -14,8 +14,8 @@ status      = "integration"
 description = "Container Caplet"
 ext.url             = "http://puniverse.github.com/quasar"
 ext.vendor          = "Parallel Universe Software Co."
-ext.licenseName    = "Eclipse Public License - v 1.0"
-ext.licenseUrl     = "http://www.eclipse.org/legal/epl-v10.html"
+ext.licenseName     = "Eclipse Public License - v 1.0"
+ext.licenseUrl      = "http://www.eclipse.org/legal/epl-v10.html"
 ext.scmUrl          = "https://github.com/puniverse/${project.name}"
 ext.scmConnection   = "https://github.com/puniverse/${project.name}.git"
 ext.distDir         = "$buildDir/dist"
@@ -43,7 +43,7 @@ jar {
     from { configurations.runtime.collect { zipTree(it) } }
     manifest {
         attributes(
-	    'Main-Class'  : mainClassName,
+            'Main-Class'  : mainClassName,
             'Caplets'     : 'ShieldedCapsule'
         )
     }
@@ -62,7 +62,7 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
 ///////// Publish Artifacts
 apply plugin: 'maven'
 apply plugin: 'signing'
-    
+
 artifacts {
     archives jar
     archives sourcesJar
@@ -81,8 +81,8 @@ uploadArchives {
 
             repository(
                 url: (isReleaseVersion ?
-	                        "https://oss.sonatype.org/service/local/staging/deploy/maven2" :
-	                        "https://oss.sonatype.org/content/repositories/snapshots")) {
+                        "https://oss.sonatype.org/service/local/staging/deploy/maven2" :
+                        "https://oss.sonatype.org/content/repositories/snapshots")) {
                 // User and Password are taken from ~/.gradle/gradle.properties
                 authentication(userName: project.sonatypeUsername, password: project.sonatypePassword)
             }
@@ -112,8 +112,4 @@ uploadArchives {
             }
         }
     }
-}
-
-task wrapper(type: Wrapper) {
-    gradleVersion = '2.1'
 }
