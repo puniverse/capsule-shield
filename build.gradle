@@ -42,9 +42,10 @@ dependencies {
 jar {
     from { configurations.runtime.collect { zipTree(it) } }
     manifest {
-        attributes(
-            'Main-Class'  : mainClassName,
-            'Caplets'     : 'ShieldedCapsule'
+        attributes (
+            'Premain-Class' : mainClassName,
+            'Main-Class'    : mainClassName,
+            'Caplets'       : 'ShieldedCapsule'
         )
     }
 }
