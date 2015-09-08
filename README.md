@@ -33,13 +33,13 @@ The following additional manifest entries can be used to customize the container
   * `Privileged`: whether the container will be a privileged one or not; unprivileged containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/) and are safer (default: `false`).
 
   * Valid for both privileged and unprivileged containers:
-    * `LXC-SysDir-Share`: the location of LXC's system-wide `share` directory (default: `/usr/share/lxc`).
-    * `Memory-Limit`: cgroup memory limit (default: _none_).
+    * `LXC-SysDir-Share`: the location of the LXC distribution's system-wide `share` directory; this is installation/distro-dependent but the default should work in most cases (default: `/usr/share/lxc`).
+    * `Memory-Limit`: `cgroup` memory limit (default: _none_).
     * `CPU-Shares`: cgroup cpu shares (default: _none_).
     * `TTY`: whether the console device will be enabled in the container (default: `false`).
     * `Hostname`: the host name assigned to the container (default: _none_).
     * `Full-Networking`: whether networking will be enabled (default: `true`).
-    * `Host-Only-Networking`: whether host-only networking will be enabled; this is mutually esclusive with `Network` (default: `false`).
+    * `Host-Only-Networking`: whether host-only networking will be enabled; this is mutually esclusive with `Full-Networking` (default: `false`).
     * `Network-Bridge`: the name of the bridge adapter for networking (default: `lxcbr0`).
 
   * Valid only for privileged containers ([some insight about user namespaces and user mappings](https://lwn.net/Articles/532593/) can be useful):
@@ -49,7 +49,9 @@ The following additional manifest entries can be used to customize the container
     * `GID-Map-Size`: the size of the consecutive group ID map in an unprivileged container (default: `65536`)
     * `Allowed-Devices`: a list of additional allowed devices in an unprivileged container (example: `"c 136:* rwm" ""`, default: _none_)
 
-The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule/apps/<app-id>/capsule-shield/lxc` and re-created automatically when needed. Should you want/need, you can destroy it manually with `lxc-destroy -n lxc -P ``${HOME}/.capsule/apps/<app-id>/capsule-shield``.
+The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule/apps/<app-id>/capsule-shield/lxc` and re-created automatically when needed.
+
+Please note that the container's root disk is owned by a different user and **cannot be destroyed without user mapping**; should you want or need you can destroy it manually with `lxc-destroy -n lxc -P ${HOME}/.capsule/apps/<app-id>/capsule-shield` (or `lxc-destroy -n lxc -P ${CAPSULE_CACHE_DIR}/apps/<app-id>/capsule-shield` if Capsule's cache directory has been redefined through the `CAPSULE_CACHE_DIR` environment variable).
 
 ## License
 
