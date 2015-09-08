@@ -100,16 +100,11 @@ public class ShieldedCapsule extends Capsule {
 
 	public ShieldedCapsule(Capsule pred) {
 		super(pred);
-		final boolean unshielded = systemPropertyEmptyOrTrue(PROP_UNSHIELDED);
 
-		if (!unshielded) {
-			if (!isLinux())
-				throw new RuntimeException("Unsupported environment: Currently shielded capsules are only supported on linux."
-					+ " Run with -D" + PROP_UNSHIELDED + " to run unshielded");
-			if (!isLXCInstalled())
-				throw new RuntimeException("Unsupported environment: lxc not found"
-					+ " Run with -D" + PROP_UNSHIELDED + " to run unshielded");
-		}
+		if (!isLinux())
+			throw new RuntimeException("Unsupported environment: Currently shielded capsules are only supported on linux.");
+		if (!isLXCInstalled())
+			throw new RuntimeException("Unsupported environment: LXC tooling not found");
 	}
 
 	@Override
