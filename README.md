@@ -28,30 +28,29 @@ It can be both run against (or embedded in) plain (e.g. "fat") capsules and [Mav
 
 ## Additional Capsule manifest entries
 
-The following additional manifest entries can be used to customize the container environment:
+The following additional manifest entries and system properties can be used to customize the container environment:
 
-  * `Privileged`: whether the container will be a privileged one or not; unprivileged containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/) and are safer (default: `false`).
+  * `capsule.shield.lxc.privileged` system property: whether the container will be a privileged one or not; unprivileged containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/) and are safer (default: `false`).
 
   * Valid for both privileged and unprivileged containers:
-    * `LXC-SysDir-Share`: the location of the LXC distribution's system-wide `share` directory; this is installation/distro-dependent but the default should work in most cases (default: `/usr/share/lxc`).
-    * `Memory-Limit`: `cgroup` memory limit (default: _none_).
-    * `CPU-Shares`: cgroup cpu shares (default: _none_).
-    * `TTY`: whether the console device will be enabled in the container (default: `false`).
-    * `Hostname`: the host name assigned to the container (default: _none_).
-    * `Full-Networking`: whether networking will be enabled (default: `true`).
-    * `Host-Only-Networking`: whether host-only networking will be enabled; this is mutually esclusive with `Full-Networking` (default: `false`).
-    * `Network-Bridge`: the name of the bridge adapter for networking (default: `lxcbr0`).
+    * `capsule.shield.lxc.sysShareDir` system property: the location of the LXC distribution's system-wide `share` directory; this is installation/distro-dependent but the default should work in most cases (default: `/usr/share/lxc`).
+    * `LXC-Networking-Type`: the LXC networking type to be configured (default: `veth`). The `capsule.shield.lxc.networkingType` system property can override it.
+    * `LXC-Network-Bridge`: the name of the bridge adapter for networking (default: `lxcbr0`). The `capsule.shield.lxc.networkBridge` system property can override it.
+    * `LXC-Allow-TTY`: whether the console device will be enabled in the container (default: `false`). The `capsule.shield.lxc.allowTTY` system property can override it.
+    * `Memory-Limit`: `cgroup` memory limit (default: _none_). The `capsule.shield.memoryLimit` system property can override it.
+    * `CPU-Shares`: cgroup cpu shares (default: _none_). The `capsule.shield.cpuShares` system property can override it.
+    * `Hostname`: the host name assigned to the container (default: _none_). The `capsule.shield.hostname` system property can override it.
 
   * Valid only for privileged containers ([some insight about user namespaces and user mappings](https://lwn.net/Articles/532593/) can be useful):
-    * `UID-Map-Start`: the first (root) user ID in an unprivileged container (default: `100000`)
-    * `UID-Map-Size`: the size of the consecutive user ID map in an unprivileged container (default: `65536`)
-    * `GID-Map-Start`: the first (root) group ID in an unprivileged container (default: `100000`)
-    * `GID-Map-Size`: the size of the consecutive group ID map in an unprivileged container (default: `65536`)
-    * `Allowed-Devices`: a list of additional allowed devices in an unprivileged container (example: `"c 136:* rwm" ""`, default: _none_)
+    * `capsule.shield.lxc.unprivileged.uidMapStart` system property: the first user ID in an unprivileged container (default: `100000`)
+    * `capsule.shield.lxc.unprivileged.uidMapSize` system property: the size of the consecutive user ID map in an unprivileged container (default: `65536`)
+    * `capsule.shield.lxc.unprivileged.gidMapStart` system property: the first group ID in an unprivileged container (default: `100000`)
+    * `capsule.shield.lxc.unprivileged.gidMapSize` system property: the size of the consecutive group ID map in an unprivileged container (default: `65536`)
+    * `Allowed-Devices`: a list of additional allowed devices in an unprivileged container (example: `"c 136:* rwm" ""`, default: _none_). The `capsule.shield.allowedDevices` system property can override it.
 
-The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule/apps/<app-id>/capsule-shield/lxc` and re-created automatically when needed.
+The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule/apps/<app-id>/capsule-shield/lxc` (or `${CAPSULE_APP_CACHE}/apps/<app-id>/capsule-shield/lxc` if Capsule's cache directory has been re-defined through the `CAPSULE_CACHE_DIR` environment variable) and re-created automatically when needed.
 
-Please note that the container's root disk is owned by a different user and **cannot be destroyed without user mapping**; should you want or need you can destroy it manually with `lxc-destroy -n lxc -P ${HOME}/.capsule/apps/<app-id>/capsule-shield` (or `lxc-destroy -n lxc -P ${CAPSULE_CACHE_DIR}/apps/<app-id>/capsule-shield` if Capsule's cache directory has been redefined through the `CAPSULE_CACHE_DIR` environment variable).
+Please note that the container's root disk is owned by a different user and **cannot be destroyed without user mapping**; should you want or need you can destroy it manually with `lxc-destroy -n lxc -P ${HOME}/.capsule/apps/<app-id>/capsule-shield` (or `lxc-destroy -n lxc -P ${CAPSULE_CACHE_DIR}/apps/<app-id>/capsule-shield` if Capsule's cache directory has been re-defined through the `CAPSULE_CACHE_DIR` environment variable).
 
 ## License
 

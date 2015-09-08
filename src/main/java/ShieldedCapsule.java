@@ -21,6 +21,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 /**
@@ -57,27 +58,38 @@ public class ShieldedCapsule extends Capsule {
 
 	private static final String SEP = File.separator;
 
-	private static final String PROP_UNSHIELDED = "capsule.unshield";
-
 	private static final String PROP_JAVA_VERSION = "java.version";
 	private static final String PROP_JAVA_HOME = "java.home";
 
 	private static final String PROP_OS_NAME = "os.name";
 
-	private static final Entry<String, String> LXC_SYSDIR_SHARE = ATTRIBUTE("LXC-SysDir-Share", T_STRING(), SEP + "usr" + SEP + "share" + SEP + "lxc", true, "");
-	private static final Entry<String, Boolean> ATTR_PRIVILEGED = ATTRIBUTE("Privileged", T_BOOL(), false, true, "");
-	private static final Entry<String, Boolean> ATTR_FULL_NETWORKING = ATTRIBUTE("Full-Networking", T_BOOL(), true, true, "");
-	private static final Entry<String, String> ATTR_NETWORK_BRIDGE = ATTRIBUTE("Network-Bridge", T_STRING(), "lxcbr0", true, "");
-	private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, "");
-	private static final Entry<String, Boolean> ATTR_HOST_ONLY_NETWORKING = ATTRIBUTE("Host-Only-Networking", T_BOOL(), false, true, "");
-	private static final Entry<String, Boolean> ATTR_TTY = ATTRIBUTE("TTY", T_BOOL(), false, true, "");
-	private static final Entry<String, Long> ATTR_UID_MAP_START = ATTRIBUTE("UID-Map-Start", T_LONG(), 100000l, true, "");
-	private static final Entry<String, Long> ATTR_UID_MAP_SIZE = ATTRIBUTE("UID-Map-Size", T_LONG(), 65536l, true, "");
-	private static final Entry<String, Long> ATTR_GID_MAP_START = ATTRIBUTE("GID-Map-Start", T_LONG(), 100000l, true, "");
-	private static final Entry<String, Long> ATTR_GID_MAP_SIZE = ATTRIBUTE("GID-Map-Size", T_LONG(), 65536l, true, "");
+	private static final String PROP_UID_MAP_START = "capsule.shield.lxc.unprivileged.uidMapStart";
+	private static final String PROP_UID_MAP_START_DEFAULT = "100000";
+	private static final String PROP_GID_MAP_START = "capsule.shield.lxc.unprivileged.gidMapStart";
+	private static final String PROP_GID_MAP_START_DEFAULT = "100000";
+	private static final String PROP_UID_MAP_SIZE = "capsule.shield.lxc.unprivileged.uidMapSize";
+	private static final String PROP_UID_MAP_SIZE_DEFAULT = "65536";
+	private static final String PROP_GID_MAP_SIZE = "capsule.shield.lxc.unprivileged.gidMapSize";
+	private static final String PROP_GID_MAP_SIZE_DEFAULT = "65535";
+	private static final String PROP_LXC_PRIVILEGED = "capsule.shield.lxc.privileged";
+	private static final String PROP_LXC_PRIVILEGED_DEFAULT = "false";
+	private static final String PROP_LXC_SYSSHAREDIR = "capsule.shield.lxc.sysShareDir";
+	private static final String PROP_LXC_SYSSHAREDIR_DEFAULT = "/usr/share/lxc";
 
+	private static final String PROP_LXC_NETWORKING_TYPE = "capsule.shield.lxc.networkingType";
+	private static final Entry<String, String> ATTR_LXC_NETWORKING_TYPE = ATTRIBUTE("LXC-Networking-Type", T_STRING(), "veth", true, "");
+	private static final String PROP_LXC_NETWORK_BRIDGE = "capsule.shield.lxc.networkBridge";
+	private static final Entry<String, String> ATTR_LXC_NETWORK_BRIDGE = ATTRIBUTE("LXC-Network-Bridge", T_STRING(), "lxcbr0", true, "");
+	private static final String PROP_LXC_ALLOW_TTY =  "capsule.shield.lxc.allowTTY";
+	private static final Entry<String, Boolean> ATTR_LXC_ALLOW_TTY = ATTRIBUTE("LXC-Allow-TTY", T_BOOL(), false, true, "");
+
+	private static final String PROP_HOSTNAME =  "capsule.shield.hostname";
+	private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, "");
+	private static final String PROP_ALLOWED_DEVICES =  "capsule.shield.allowedDevices";
 	private static final Entry<String, List<String>> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_LIST(T_STRING()), null, true, "");
-	private static final Entry<String, Long> ATTR_CPUS = ATTRIBUTE("CPU-Shares", T_LONG(), null, true, "");
+	private static final String PROP_CPU_SHARES =  "capsule.shield.cpuShares";
+	private static final Entry<String, Long> ATTR_CPU_SHARES = ATTRIBUTE("CPU-Shares", T_LONG(), null, true, "");
+	private static final String PROP_MEMORY_LIMIT =  "capsule.shield.memoryLimit";
 	private static final Entry<String, Long> ATTR_MEMORY_LIMIT = ATTRIBUTE("Memory-Limit", T_LONG(), null, true, "");
 
 	private static final String CONTAINER_NAME = "lxc";
@@ -267,8 +279,18 @@ public class ShieldedCapsule extends Capsule {
 	 * {@see http://man7.org/linux/man-pages/man1/lxc-usernsexec.1.html}
 	 */
 	private void chownRootFS() throws IOException, InterruptedException {
-		final Long uidMapStart = getAttribute(ATTR_UID_MAP_START);
-		final Long gidMapStart = getAttribute(ATTR_GID_MAP_START);
+		final Long uidMapStart;
+		try {
+			uidMapStart = Long.parseLong(System.getProperty(PROP_UID_MAP_START, PROP_UID_MAP_START_DEFAULT));
+		} catch (Throwable t) {
+			throw new RuntimeException("Cannot parse sysprop " + PROP_UID_MAP_START + " into a Long value", t);
+		}
+		final Long gidMapStart;
+		try {
+			gidMapStart = Long.parseLong(System.getProperty(PROP_GID_MAP_START, PROP_GID_MAP_START_DEFAULT));
+		} catch (Throwable t) {
+			throw new RuntimeException("Cannot parse sysprop " + PROP_GID_MAP_START + " into a Long value", t);
+		}
 
 		final Long currentUID = getCurrentUID();
 		final Long currentGID = getCurrentGID();
@@ -287,17 +309,40 @@ public class ShieldedCapsule extends Capsule {
 
 		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(getConfFile(), StandardOpenOption.CREATE))) {
 
-			final String lxcConfig = getAttribute(LXC_SYSDIR_SHARE) + SEP + "config";
-			final boolean privileged = getAttribute(ATTR_PRIVILEGED);
-			final boolean network = getAttribute(ATTR_FULL_NETWORKING);
-			final String hostname = getAttribute(ATTR_HOSTNAME);
-			final String networkBridge = getAttribute(ATTR_NETWORK_BRIDGE);
-			final boolean hostNetworking = getAttribute(ATTR_HOST_ONLY_NETWORKING);
-			final boolean tty = getAttribute(ATTR_TTY);
-			final int minUidMap = getAttribute(ATTR_UID_MAP_START).intValue();
-			final int sizeUidMap = getAttribute(ATTR_UID_MAP_SIZE).intValue();
-			final int minGidMap = getAttribute(ATTR_GID_MAP_START).intValue();
-			final int sizeGidMap = getAttribute(ATTR_GID_MAP_SIZE).intValue();
+			final String lxcConfig = System.getProperty(PROP_LXC_SYSSHAREDIR, PROP_LXC_SYSSHAREDIR_DEFAULT) + SEP + "config";
+			boolean privileged = false;
+			try {
+				privileged = Boolean.parseBoolean(System.getProperty(PROP_LXC_PRIVILEGED, PROP_LXC_PRIVILEGED_DEFAULT));
+			} catch (Throwable ignored) {}
+			final String networkType = getPropertyOrAttributeString(PROP_LXC_NETWORKING_TYPE, ATTR_LXC_NETWORKING_TYPE);
+			final String networkBridge = getPropertyOrAttributeString(PROP_LXC_NETWORK_BRIDGE, ATTR_LXC_NETWORK_BRIDGE);
+			boolean tty = getPropertyOrAttributeBool(PROP_LXC_ALLOW_TTY, ATTR_LXC_ALLOW_TTY);
+			final String hostname = getPropertyOrAttributeString(PROP_HOSTNAME, ATTR_HOSTNAME);
+			final Long uidMapStart;
+			try {
+				uidMapStart = Long.parseLong(System.getProperty(PROP_UID_MAP_START, PROP_UID_MAP_START_DEFAULT));
+			} catch (Throwable t) {
+				throw new RuntimeException("Cannot parse sysprop " + PROP_UID_MAP_START + " into a Long value", t);
+			}
+			final Long gidMapStart;
+			try {
+				gidMapStart = Long.parseLong(System.getProperty(PROP_GID_MAP_START, PROP_GID_MAP_START_DEFAULT));
+			} catch (Throwable t) {
+				throw new RuntimeException("Cannot parse sysprop " + PROP_GID_MAP_START + " into a Long value", t);
+			}
+			final Long sizeUidMap;
+			try {
+				sizeUidMap = Long.parseLong(System.getProperty(PROP_UID_MAP_SIZE, PROP_UID_MAP_SIZE_DEFAULT));
+			} catch (Throwable t) {
+				throw new RuntimeException("Cannot parse sysprop " + PROP_UID_MAP_SIZE + " into a Long value", t);
+			}
+			final Long sizeGidMap;
+			try {
+				sizeGidMap = Long.parseLong(System.getProperty(PROP_GID_MAP_SIZE, PROP_GID_MAP_SIZE_DEFAULT));
+			} catch (Throwable t) {
+				throw new RuntimeException("Cannot parse sysprop " + PROP_GID_MAP_SIZE + " into a Long value", t);
+			}
+
 
 			// System mounts
 			out.println("#\n" +
@@ -320,8 +365,8 @@ public class ShieldedCapsule extends Capsule {
 			// User map
 			if (!privileged) {
 				out.println("\n## Unprivileged container user map");
-				out.println("lxc.id_map = u 0 " + minUidMap + " " + sizeUidMap + "\n"
-					+ "lxc.id_map = g 0 " + minGidMap + " " + sizeGidMap);
+				out.println("lxc.id_map = u 0 " + uidMapStart + " " + sizeUidMap + "\n"
+					+ "lxc.id_map = g 0 " + gidMapStart + " " + sizeGidMap);
 			}
 
 			// System mounts
@@ -357,12 +402,12 @@ public class ShieldedCapsule extends Capsule {
 
 			// Network config
 			out.println("\n## Network");
-			if (network)
+			if ("veth".equals(networkType))
 				out.println("lxc.network.type = veth\n"
 					+ "lxc.network.flags = up\n"
 					+ "lxc.network.link = " + networkBridge + "\n"
 					+ "lxc.network.name = eth0");
-			else if (hostNetworking)
+			else if ("host".equals(networkType))
 				out.println("lxc.network.type = none");
 			else
 				out.println("lxc.network.type = empty\n"
@@ -375,7 +420,8 @@ public class ShieldedCapsule extends Capsule {
 			else {
 				out.println("lxc.cgroup.devices.deny = a"); // no implicit access to devices
 
-				if (hasAttribute(ATTR_ALLOWED_DEVICES)) {
+				final List<String> allowedDevices = getPropertyOrAttributeStringList(PROP_ALLOWED_DEVICES, ATTR_ALLOWED_DEVICES);
+				if (allowedDevices != null) {
 					for (String device : getAttribute(ATTR_ALLOWED_DEVICES))
 						out.println("lxc.cgroup.devices.allow = " + device);
 				} else {
@@ -413,14 +459,16 @@ public class ShieldedCapsule extends Capsule {
 
 			// limits
 			out.println("\n## Limits");
-			if (hasAttribute(ATTR_MEMORY_LIMIT)) {
-				int maxMem = (int) (long) getAttribute(ATTR_MEMORY_LIMIT);
+			final Long memLimit = getPropertyOrAttributeLong(PROP_MEMORY_LIMIT, ATTR_MEMORY_LIMIT);
+			if (memLimit != null) {
+				int maxMem = memLimit.intValue();
 				out.println("lxc.cgroup.memory.limit_in_bytes = " + maxMem + "\n"
 					+ "lxc.cgroup.memory.soft_limit_in_bytes = " + maxMem + "\n"
 					+ "lxc.cgroup.memory.memsw.limit_in_bytes = " + getMemorySwap(maxMem, true));
 			}
-			if (hasAttribute(ATTR_CPUS))
-				out.println("lxc.cgroup.cpu.shares = " + getAttribute(ATTR_CPUS));
+			final Long cpuShares = getPropertyOrAttributeLong(PROP_CPU_SHARES, ATTR_CPU_SHARES);
+			if (cpuShares != null)
+				out.println("lxc.cgroup.cpu.shares = " + cpuShares);
 
 			out.println("\n## Misc");
 			out.println("lxc.kmsg = 0"); // kmsg unneeded, http://man7.org/linux/man-pages/man5/lxc.container.conf.5.html
@@ -502,6 +550,42 @@ public class ShieldedCapsule extends Capsule {
 			throw new RuntimeException(e);
 		}
 	}
+
+	private String getPropertyOrAttributeString(String propName, Map.Entry<String, String> attr) {
+		final String propValue = System.getProperty(propName);
+		if (propValue == null)
+			return getAttribute(attr);
+		return propValue;
+	}
+
+	private List<String> getPropertyOrAttributeStringList(String propName, Map.Entry<String, List<String>> attr) {
+		final String propValue = System.getProperty(propName);
+		if (propValue == null)
+			return getAttribute(attr);
+		return Arrays.asList(propValue.split(":"));
+	}
+
+	private Long getPropertyOrAttributeLong(String propName, Map.Entry<String, Long> attr) {
+		final String propValue = System.getProperty(propName);
+		if (propValue == null)
+			return getAttribute(attr);
+		try {
+			return Long.parseLong(propValue);
+		} catch (Throwable t) {
+			return getAttribute(attr);
+		}
+	}
+
+	private Boolean getPropertyOrAttributeBool(String propName, Map.Entry<String, Boolean> attr) {
+		final String propValue = System.getProperty(propName);
+		if (propValue == null)
+			return getAttribute(attr);
+		try {
+			return Boolean.parseBoolean(propValue);
+		} catch (Throwable t) {
+			return getAttribute(attr);
+		}
+	}
 	//</editor-fold>
 
 	//<editor-fold defaultstate="collapsed" desc="Platform utils">
@@ -541,11 +625,6 @@ public class ShieldedCapsule extends Capsule {
 
 	private static boolean isLinux() {
 		return System.getProperty(PROP_OS_NAME).toLowerCase().contains("nux");
-	}
-
-	private static boolean systemPropertyEmptyOrTrue(String property) {
-		final String value = System.getProperty(property);
-		return value != null && (value.isEmpty() || Boolean.parseBoolean(value));
 	}
 
 	private static <K, V> Entry<K, V> entry(K k, V v) {
