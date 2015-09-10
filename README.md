@@ -1,6 +1,6 @@
 # Capsule Shield
 
-A [caplet](https://github.com/puniverse/capsule#what-are-caplets) that launches a [capsule](https://github.com/puniverse/capsule) in a minimal container for segregation purposes (currently only [LXC](https://linuxcontainers.org/)).
+A [caplet](https://github.com/puniverse/capsule#what-are-caplets) that launches a [capsule](https://github.com/puniverse/capsule) in a minimal container.
 
 ## Requirements
 
