@@ -1,13 +1,16 @@
 /*
  * Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.
- * 
- * This program and the accompanying materials are licensed under the terms 
+ *
+ * This program and the accompanying materials are licensed under the terms
  * of the Eclipse Public License v1.0, available at
  * http://www.eclipse.org/legal/epl-v10.html
  */
 
 import java.io.*;
+import java.lang.instrument.Instrumentation;
 import java.lang.reflect.AccessibleObject;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -23,12 +26,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import sun.net.spi.nameservice.NameService;
 
 /**
  * @author pron
  * @author circlespainter
  */
-public class ShieldedCapsule extends Capsule {
+public class ShieldedCapsule extends Capsule implements NameService {
     /*
      * See:
      *
@@ -60,8 +64,10 @@ public class ShieldedCapsule extends Capsule {
 
 	private static final String PROP_JAVA_VERSION = "java.version";
 	private static final String PROP_JAVA_HOME = "java.home";
-
 	private static final String PROP_OS_NAME = "os.name";
+    private static final String PROP_DOMAIN = "sun.net.spi.nameservice.domain";
+    private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
+    private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
 
 	private static final String PROP_UID_MAP_START = "capsule.shield.lxc.unprivileged.uidMapStart";
 	private static final String PROP_UID_MAP_START_DEFAULT = "100000";
@@ -720,4 +726,52 @@ public class ShieldedCapsule extends Capsule {
 		}
 	}
 	//</editor-fold>
+
+    //<editor-fold defaultstate="collapsed" desc="NameService">
+    /////////// NameService ///////////////////////////////////
+    protected void agent(Instrumentation inst) {
+        setLinkNameService(); // must be done before call to super
+
+        super.agent(inst);
+    }
+    //</editor-fold>
+
+    //<editor-fold defaultstate="collapsed" desc="NameService">
+    /////////// NameService ///////////////////////////////////
+    private static void setLinkNameService() {
+        String newv = "dns,shield";
+        for (int i=1;; i++) {
+            String prop = PROP_PREFIX_NAMESERVICE + i;
+            String oldv = System.getProperty(prop);
+            System.setProperty(prop, newv);
+            if (oldv == null || oldv.isEmpty())
+                break;
+            newv = oldv;
+        }
+    }
+    
+    /**
+     * Look up all hosts by name.
+     *
+     * @param hostName the host name
+     * @return an array of addresses for the host name
+     * @throws UnknownHostException if there are no names for this host, or if resolution fails
+     */
+    public InetAddress[] lookupAllHostAddr(final String hostName) throws UnknownHostException {
+        // TODO: Linking
+        throw new UnknownHostException("Failed to resolve address");
+    }
+
+    /**
+     * Get the name of the host with the given IP address.
+     *
+     * @param bytes the address bytes
+     * @return the host name
+     * @throws UnknownHostException if there is no host name for this IP address
+     */
+    public String getHostByAddr(final byte[] bytes) throws UnknownHostException {
+        // TODO: Linking
+        throw new UnknownHostException("Failed to resolve address");
+    }
+    //</editor-fold>
 }
