@@ -22,12 +22,12 @@ public class CapsuleNameServiceDescriptor implements NameServiceDescriptor {
         return "shield";
     }
 
-    public NameService createNameService() {
-        return (NameService)getCapsule("ShieldedCapsule");
-    }
-
     public String getType() {
         return "dns";
+    }
+
+    public NameService createNameService() {
+        return (NameService)getCapsule("ShieldedCapsule");
     }
 
     private static final Object getCapsule(String capletClass) {
