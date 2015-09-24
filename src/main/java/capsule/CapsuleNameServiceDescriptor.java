@@ -32,7 +32,7 @@ public class CapsuleNameServiceDescriptor implements NameServiceDescriptor {
 
     private static final Object getCapsule(String capletClass) {
         try {
-            final Class<?> capsuleClass = Class.forName("Capsule.class");
+            final Class<?> capsuleClass = Class.forName("Capsule");
             try { // Capsule 1.0.1
                 return capsuleClass.getDeclaredMethod("getCapsule", String.class).invoke(capletClass);
             } catch(InvocationTargetException e) {
