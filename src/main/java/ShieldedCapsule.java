@@ -6,14 +6,17 @@
  * http://www.eclipse.org/legal/epl-v10.html
  */
 
+import sun.net.spi.nameservice.NameService;
+
+import javax.management.remote.JMXServiceURL;
+import javax.management.remote.rmi.RMIConnectorServer;
+import javax.net.ServerSocketFactory;
+import javax.rmi.ssl.SslRMIServerSocketFactory;
 import java.io.*;
 import java.lang.instrument.Instrumentation;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.AccessibleObject;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.net.*;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,19 +24,17 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.util.AbstractMap;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.server.RMIServerSocketFactory;
+import java.util.*;
 import java.util.Map.Entry;
-import sun.net.spi.nameservice.NameService;
 
 /**
  * @author pron
  * @author circlespainter
  */
 public class ShieldedCapsule extends Capsule implements NameService {
-    /*
+	/*
      * See:
      *
      * https://lwn.net/Articles/531114/#series_index
@@ -65,9 +66,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String PROP_JAVA_VERSION = "java.version";
 	private static final String PROP_JAVA_HOME = "java.home";
 	private static final String PROP_OS_NAME = "os.name";
-    private static final String PROP_DOMAIN = "sun.net.spi.nameservice.domain";
-    private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
-    private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
+	private static final String PROP_DOMAIN = "sun.net.spi.nameservice.domain";
+	private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
+	private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
 
 	private static final String PROP_UID_MAP_START = "capsule.shield.lxc.unprivileged.uidMapStart";
 	private static final String PROP_UID_MAP_START_DEFAULT = "100000";
@@ -89,7 +90,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String PROP_LXC_ALLOW_TTY =  "capsule.shield.lxc.allowTTY";
 	private static final Entry<String, Boolean> ATTR_LXC_ALLOW_TTY = ATTRIBUTE("LXC-Allow-TTY", T_BOOL(), false, true, "");
 
-	private static final String PROP_HOSTNAME =  "capsule.shield.hostname";
+	private static final String PROP_JMX = "capsule.shield.jmx";
+	private static final String PROP_HOSTNAME = "capsule.shield.hostname";
 	private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, "");
 	private static final String PROP_ALLOWED_DEVICES =  "capsule.shield.allowedDevices";
 	private static final Entry<String, List<String>> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_LIST(T_STRING()), null, true, "");
@@ -126,6 +128,15 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	@Override
+	@SuppressWarnings("unchecked")
+	protected <T> T attribute(Map.Entry<String, T> attr) {
+		// TODO Understand why the agent doesn't work as a wrapper
+		if (ATTR_AGENT == attr && emptyOrTrue(System.getProperty(PROP_JMX)))
+			return (T) Boolean.TRUE;
+		return super.attribute(attr);
+	}
+
+	@Override
 	protected final ProcessBuilder prelaunch(List<String> jvmArgs, List<String> args) {
 		this.localRepo = getLocalRepo();
 
@@ -137,15 +148,86 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 
 		final ProcessBuilder pb = super.prelaunch(jvmArgs, args);
+		setupAgentAndJMXProps(pb.command());
 		pb.command().addAll(0,
-			Arrays.asList("lxc-execute",
-				"--logfile=lxc.log",
-				"--logpriority=" + lxcLogLevel(getLogLevel()),
-				"-P", getContainerParentDir().toString(),
-				"-n", CONTAINER_NAME,
-				"--",
-				"/networked"));
+				Arrays.asList("lxc-execute",
+						"--logfile=lxc.log",
+						"--logpriority=" + lxcLogLevel(getLogLevel()),
+						"-P", getContainerParentDir().toString(),
+						"-n", CONTAINER_NAME,
+						"--",
+						"/networked"));
 		return pb;
+	}
+
+	//<editor-fold defaultstate="collapsed" desc="JMX">
+	/////////// JMX ///////////////////////////////////
+	private static class RMIServerSocketFactoryImpl extends SslRMIServerSocketFactory {
+		private final InetAddress localAddress;
+
+		public RMIServerSocketFactoryImpl(InetAddress pAddress) {
+			super(null, null, true);
+			localAddress = pAddress;
+		}
+
+		public ServerSocket createServerSocket(int pPort) throws IOException  {
+			return ServerSocketFactory.getDefault().createServerSocket(pPort, 0, localAddress);
+		}
+	}
+
+	@Override
+	protected final JMXServiceURL startJMXServer() {
+		// http://vafer.org/blog/20061010091658/
+		try {
+			final int namingPort = 8888; // TODO Randomize
+			final int protocolPort = 8889; // TODO Randomize
+			log(LOG_VERBOSE, "Starting JMXConnectorServer");
+			final String ip = getVNetContainerIP();
+			final RMIServerSocketFactory serverFactory = new RMIServerSocketFactoryImpl(InetAddress.getByName(ip));
+
+			LocateRegistry.createRegistry(namingPort, null, serverFactory);
+
+			final StringBuilder url =
+				new StringBuilder()
+					.append("service:jmx:").append("rmi://").append(ip).append(':').append(protocolPort).append("/jndi/")
+					.append("rmi://").append(ip).append(':').append(namingPort).append("/connector")
+					.append("/" + UUID.randomUUID().toString());
+
+			log(LOG_VERBOSE, "Starting management agent at " + url);
+
+			final JMXServiceURL jmxServiceURL = new JMXServiceURL(url.toString());
+			final Map<String, Object> env = new HashMap<>();
+			env.put(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE, serverFactory);
+			final RMIConnectorServer rmiServer = new RMIConnectorServer(jmxServiceURL, env, ManagementFactory.getPlatformMBeanServer());
+			rmiServer.start();
+
+			return jmxServiceURL;
+		} catch (Exception e) {
+			log(LOG_VERBOSE, "JMXConnectorServer failed: " + e.getMessage());
+			log(LOG_VERBOSE, e);
+			return null;
+		}
+	}
+
+	private boolean setupAgentAndJMXProps(List<String> command) {
+		int idx = -1;
+		for(int i = 0; i < command.size(); i++) {
+			if (command.get(i).startsWith("-Dcapsule.address=")) {
+				idx = i;
+				break;
+			}
+		}
+		if (idx >= 0) {
+			command.remove(idx);
+			try {
+				command.add(idx, "-Dcapsule.address=" + getVNetHostIP());
+				return true;
+			} catch (SocketException e) {
+				log(LOG_QUIET, e);
+				return false;
+			}
+		}
+		return false;
 	}
 
 	private boolean isBuildNeeded() {
@@ -242,9 +324,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		Files.createDirectory(ret.resolve("sys"));
 		Files.createDirectory(ret.resolve("usr"));
 
-		Path tmp = ret.resolve("tmp");
+		final Path tmp = ret.resolve("tmp");
 		Files.createDirectory(tmp);
 		exec("chmod", "+t", tmp.toAbsolutePath().normalize().toString());
+		exec("chmod", "a+rwx", tmp.toAbsolutePath().normalize().toString());
 
 		final Path networked = ret.resolve("networked");
 		Files.createFile(networked, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxrwxr-x")));
@@ -725,53 +808,81 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			return Long.parseLong(reader.readLine());
 		}
 	}
+
+	private static boolean emptyOrTrue(String value) {
+		if (value == null)
+			return false;
+		return value.isEmpty() || Boolean.parseBoolean(value);
+	}
+
+	private String getVNetHostIP() throws SocketException {
+		// TODO Get from conf
+		final Enumeration<InetAddress> vas = NetworkInterface.getByName("lxcbr0").getInetAddresses();
+		while (vas.hasMoreElements()) {
+			final InetAddress ia = vas.nextElement();
+			if (ia instanceof Inet4Address)
+				return ia.getHostAddress();
+		}
+		return null;
+	}
+
+	private String getVNetContainerIP() throws SocketException {
+		// TODO Get from conf
+		final Enumeration<InetAddress> vas = NetworkInterface.getByName("eth0").getInetAddresses();
+		while (vas.hasMoreElements()) {
+			final InetAddress ia = vas.nextElement();
+			if (ia instanceof Inet4Address)
+				return ia.getHostAddress();
+		}
+		return null;
+	}
 	//</editor-fold>
 
-    //<editor-fold defaultstate="collapsed" desc="NameService">
-    /////////// NameService ///////////////////////////////////
-    protected void agent(Instrumentation inst) {
-        setLinkNameService(); // must be done before call to super
+	//<editor-fold defaultstate="collapsed" desc="NameService">
+	/////////// NameService ///////////////////////////////////
+	protected void agent(Instrumentation inst) {
+		setLinkNameService(); // must be done before call to super
 
-        super.agent(inst);
-    }
-    //</editor-fold>
+		super.agent(inst);
+	}
+	//</editor-fold>
 
-    //<editor-fold defaultstate="collapsed" desc="NameService">
-    /////////// NameService ///////////////////////////////////
-    private static void setLinkNameService() {
-        String newv = "dns,shield";
-        for (int i=1;; i++) {
-            String prop = PROP_PREFIX_NAMESERVICE + i;
-            String oldv = System.getProperty(prop);
-            System.setProperty(prop, newv);
-            if (oldv == null || oldv.isEmpty())
-                break;
-            newv = oldv;
-        }
-    }
-    
-    /**
-     * Look up all hosts by name.
-     *
-     * @param hostName the host name
-     * @return an array of addresses for the host name
-     * @throws UnknownHostException if there are no names for this host, or if resolution fails
-     */
-    public InetAddress[] lookupAllHostAddr(final String hostName) throws UnknownHostException {
-        // TODO: Linking
-        throw new UnknownHostException("Failed to resolve address");
-    }
+	//<editor-fold defaultstate="collapsed" desc="NameService">
+	/////////// NameService ///////////////////////////////////
+	private static void setLinkNameService() {
+		String newv = "dns,shield";
+		for (int i = 1; ; i++) {
+			String prop = PROP_PREFIX_NAMESERVICE + i;
+			String oldv = System.getProperty(prop);
+			System.setProperty(prop, newv);
+			if (oldv == null || oldv.isEmpty())
+				break;
+			newv = oldv;
+		}
+	}
 
-    /**
-     * Get the name of the host with the given IP address.
-     *
-     * @param bytes the address bytes
-     * @return the host name
-     * @throws UnknownHostException if there is no host name for this IP address
-     */
-    public String getHostByAddr(final byte[] bytes) throws UnknownHostException {
-        // TODO: Linking
-        throw new UnknownHostException("Failed to resolve address");
-    }
-    //</editor-fold>
+	/**
+	 * Look up all hosts by name.
+	 *
+	 * @param hostName the host name
+	 * @return an array of addresses for the host name
+	 * @throws UnknownHostException if there are no names for this host, or if resolution fails
+	 */
+	public InetAddress[] lookupAllHostAddr(final String hostName) throws UnknownHostException {
+		// TODO: Linking
+		throw new UnknownHostException("Failed to resolve address");
+	}
+
+	/**
+	 * Get the name of the host with the given IP address.
+	 *
+	 * @param bytes the address bytes
+	 * @return the host name
+	 * @throws UnknownHostException if there is no host name for this IP address
+	 */
+	public String getHostByAddr(final byte[] bytes) throws UnknownHostException {
+		// TODO: Linking
+		throw new UnknownHostException("Failed to resolve address");
+	}
+	//</editor-fold>
 }
