@@ -9,7 +9,7 @@ targetCompatibility = '1.7'
 mainClassName = 'Capsule'
 
 group       = "co.paralleluniverse"
-version     = "0.1.0"
+version     = "0.2.0-SNAPSHOT"
 status      = "integration"
 description = "Container Caplet"
 ext.url             = "http://puniverse.github.com/quasar"
