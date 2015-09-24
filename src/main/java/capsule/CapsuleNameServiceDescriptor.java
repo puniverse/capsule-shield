@@ -34,7 +34,7 @@ public class CapsuleNameServiceDescriptor implements NameServiceDescriptor {
         try {
             final Class<?> capsuleClass = Class.forName("Capsule");
             try { // Capsule 1.0.1
-                return capsuleClass.getDeclaredMethod("getCapsule", String.class).invoke(capletClass);
+                return capsuleClass.getDeclaredMethod("getCapsule", String.class).invoke(null, capletClass);
             } catch(InvocationTargetException e) {
                 throw new RuntimeException(e.getCause());
             } catch(ReflectiveOperationException e) {
