@@ -856,7 +856,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//<editor-fold defaultstate="collapsed" desc="NameService">
 	/////////// NameService ///////////////////////////////////
 	private static void setLinkNameService() {
-		final String newv = "dns,shield";
+		String newv = "dns,shield";
 		for (int i = 1; ; i++) {
 			final String prop = PROP_PREFIX_NAMESERVICE + i;
 			final String oldv = System.getProperty(prop);
