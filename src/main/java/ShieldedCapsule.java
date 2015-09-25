@@ -180,6 +180,11 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		return pb;
 	}
 
+	@SuppressWarnings("deprecation")
+	public Path getWouldBeAppDir() {
+		return getCacheDir().resolve("apps").resolve(getAppId());
+	}
+
 	//<editor-fold defaultstate="collapsed" desc="JMX">
 	/////////// JMX ///////////////////////////////////
 	private static class RMIServerSocketFactoryImpl extends SslRMIServerSocketFactory {
@@ -191,6 +196,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 
 		@Override
+		@SuppressWarnings("NullableProblems")
 		public ServerSocket createServerSocket(int pPort) throws IOException  {
 			return ServerSocketFactory.getDefault().createServerSocket(pPort, 0, localAddress);
 		}
@@ -268,9 +274,22 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		return false;
 	}
 
-	private boolean isBuildNeeded() {
-		if (!Files.exists(getConfFile()))
+	private boolean isBuildNeeded() throws IOException {
+		// Check if the conf files exist
+		if (!Files.exists(getConfPath()) || !Files.exists(getNetworkedPath()))
 			return true;
+
+		// Check if the conf content has changed
+		if (!new String(Files.readAllBytes(getConfPath()), Charset.defaultCharset()).equals(getConf())) {
+			log(LOG_VERBOSE, "Conf file " + getConfPath() + " content has changed");
+			return true;
+		}
+		if (!new String(Files.readAllBytes(getNetworkedPath()), Charset.defaultCharset()).equals(getNetworked())) {
+			log(LOG_VERBOSE, "'networked' script " + getNetworkedPath() + " content has changed");
+			return true;
+		}
+
+		// Check if the application is newer
 		try {
 			FileTime jarTime = Files.getLastModifiedTime(getJarFile());
 			if (isWrapperCapsule()) {
@@ -279,8 +298,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 					jarTime = wrapperTime;
 			}
 
-			final FileTime confTime = Files.getLastModifiedTime(getConfFile());
-			return confTime.compareTo(jarTime) < 0;
+			final FileTime confTime = Files.getLastModifiedTime(getConfPath());
+			final FileTime networkedTime = Files.getLastModifiedTime(getNetworkedPath());
+			return confTime.compareTo(jarTime) < 0 || networkedTime.compareTo(jarTime) < 0;
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -296,7 +316,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 		log(LOG_VERBOSE, "Writing LXC configuration");
 		writeConfFile();
-		log(LOG_VERBOSE, "Written conf file: " + getConfFile());
+		log(LOG_VERBOSE, "Written conf file: " + getConfPath());
 
 		log(LOG_VERBOSE, "Creating rootfs");
 		createRootFS();
@@ -367,43 +387,46 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		exec("chmod", "+t", tmp.toAbsolutePath().normalize().toString());
 		exec("chmod", "a+rwx", tmp.toAbsolutePath().normalize().toString());
 
-		final Path networked = ret.resolve("networked");
+		final Path networked = getNetworkedPath();
 		Files.createFile(networked, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxrwxr-x")));
-		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(networked, StandardOpenOption.APPEND))) {
-			final String staticIP = getOptionOrAttributeString(OPT_STATIC_IP, ATTR_STATIC_IP);
-			out.println (
-				"#!/bin/bash\n" +
-				"\n" +
-				"#\n" +
-				"# Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.\n" +
-				"#\n" +
-				"# This program and the accompanying materials are licensed under the terms\n" +
-				"# of the Eclipse Public License v1.0, available at\n" +
-				"# http://www.eclipse.org/legal/epl-v10.html\n" +
-				"#\n" +
-				"\n" +
-				"# Execute a command with networking enabled.\n" +
-				"#\n" +
-				"# @author circlespainter\n" +
-				"\n" +
-				"export JAVA_HOME=/java\n" +
-				"/sbin/ifconfig lo 127.0.0.1\n" +
-				"/sbin/route add -net 127.0.0.0 netmask 255.0.0.0 lo\n" +
-				(staticIP == null ? "/sbin/dhclient\n" : "") +
-				(staticIP != null ? "/sbin/ifconfig " + CONTAINER_NET_IFACE_NAME + " " + staticIP + "\n" : "") +
-				"\"$@\"\n" +
-				"RET=$?\n" +
-				(staticIP == null ?
-					"if [ -f \"/run/dhclient.pid\" ]; then\n" +
-					"    DHCLIENT_PID=`/bin/cat /run/dhclient.pid`;\n" +
-					"    if [ -n $DHCLIENT_PID ]; then\n" +
-					"        /bin/kill `/bin/cat /run/dhclient.pid`;\n" +
-					"    fi\n" +
-					"fi\n" :
-					"") +
-				"exit $RET\n"
-			);
-		}
+		dump(getNetworked(), networked);
+	}
+
+	private String getNetworked() {
+		final String staticIP = getOptionOrAttributeString(OPT_STATIC_IP, ATTR_STATIC_IP);
+		return (
+			"#!/bin/bash\n" +
+			"\n" +
+			"#\n" +
+			"# Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.\n" +
+			"#\n" +
+			"# This program and the accompanying materials are licensed under the terms\n" +
+			"# of the Eclipse Public License v1.0, available at\n" +
+			"# http://www.eclipse.org/legal/epl-v10.html\n" +
+			"#\n" +
+			"\n" +
+			"# Execute a command with networking enabled.\n" +
+			"#\n" +
+			"# @author circlespainter\n" +
+			"\n" +
+			"export JAVA_HOME=/java\n" +
+			"/sbin/ifconfig lo 127.0.0.1\n" +
+			"/sbin/route add -net 127.0.0.0 netmask 255.0.0.0 lo\n" +
+			(staticIP == null ? "/sbin/dhclient\n" : "") +
+			(staticIP != null ? "/sbin/ifconfig " + CONTAINER_NET_IFACE_NAME + " " + staticIP + "\n" : "") +
+			"\"$@\"\n" +
+			"RET=$?\n" +
+			(staticIP == null ?
+				"if [ -f \"/run/dhclient.pid\" ]; then\n" +
+				"    DHCLIENT_PID=`/bin/cat /run/dhclient.pid`;\n" +
+				"    if [ -n $DHCLIENT_PID ]; then\n" +
+				"        /bin/kill `/bin/cat /run/dhclient.pid`;\n" +
+				"    fi\n" +
+				"fi\n" :
+				""
+			) +
+			"exit $RET\n"
+		);
 	}
 
 	/**
@@ -437,175 +460,179 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	private void writeConfFile() throws IOException {
 		Files.createDirectories(getContainerDir());
+		dump(getConf(), getConfPath());
+	}
 
-		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(getConfFile(), StandardOpenOption.CREATE))) {
+	private String getConf() {
+		final StringBuilder sb = new StringBuilder();
+		final String lxcConfig = getProperty(OPT_LXC_SYSSHAREDIR) + SEP + "config";
+		boolean privileged = false;
+		try {
+			privileged = Boolean.parseBoolean(getProperty(OPT_LXC_PRIVILEGED));
+		} catch (Throwable ignored) {
+		}
+		final String networkType = getOptionOrAttributeString(OPT_LXC_NETWORKING_TYPE, ATTR_LXC_NETWORKING_TYPE);
+		final String networkBridge = getOptionOrAttributeString(OPT_LXC_NETWORK_BRIDGE, ATTR_LXC_NETWORK_BRIDGE);
+		boolean tty = getOptionOrAttributeBool(OPT_LXC_ALLOW_TTY, ATTR_LXC_ALLOW_TTY);
+		final String hostname = getOptionOrAttributeString(OPT_HOSTNAME, ATTR_HOSTNAME);
+		final Long uidMapStart;
+		try {
+			uidMapStart = Long.parseLong(getProperty(OPT_UID_MAP_START));
+		} catch (Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_START + "with value " + getProperty(OPT_UID_MAP_START) + "  into a Long value", t);
+		}
+		final Long gidMapStart;
+		try {
+			gidMapStart = Long.parseLong(getProperty(OPT_GID_MAP_START));
+		} catch (Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_START + "with value " + getProperty(OPT_GID_MAP_START) + "  into a Long value", t);
+		}
+		final Long sizeUidMap;
+		try {
+			sizeUidMap = Long.parseLong(getProperty(OPT_UID_MAP_SIZE));
+		} catch (Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_SIZE + "with value " + getProperty(OPT_UID_MAP_SIZE) + " into a Long value", t);
+		}
+		final Long sizeGidMap;
+		try {
+			sizeGidMap = Long.parseLong(getProperty(OPT_GID_MAP_SIZE));
+		} catch (Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_SIZE + "with value " + getProperty(OPT_GID_MAP_SIZE) + " into a Long value", t);
+		}
 
-			final String lxcConfig = getProperty(OPT_LXC_SYSSHAREDIR) + SEP + "config";
-			boolean privileged = false;
-			try {
-				privileged = Boolean.parseBoolean(getProperty(OPT_LXC_PRIVILEGED));
-			} catch (Throwable ignored) {}
-			final String networkType = getOptionOrAttributeString(OPT_LXC_NETWORKING_TYPE, ATTR_LXC_NETWORKING_TYPE);
-			final String networkBridge = getOptionOrAttributeString(OPT_LXC_NETWORK_BRIDGE, ATTR_LXC_NETWORK_BRIDGE);
-			boolean tty = getOptionOrAttributeBool(OPT_LXC_ALLOW_TTY, ATTR_LXC_ALLOW_TTY);
-			final String hostname = getOptionOrAttributeString(OPT_HOSTNAME, ATTR_HOSTNAME);
-			final Long uidMapStart;
-			try {
-				uidMapStart = Long.parseLong(getProperty(OPT_UID_MAP_START));
-			} catch (Throwable t) {
-				throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_START + "with value " + getProperty(OPT_UID_MAP_START) + "  into a Long value", t);
-			}
-			final Long gidMapStart;
-			try {
-				gidMapStart = Long.parseLong(getProperty(OPT_GID_MAP_START));
-			} catch (Throwable t) {
-				throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_START + "with value " + getProperty(OPT_GID_MAP_START) + "  into a Long value", t);
-			}
-			final Long sizeUidMap;
-			try {
-				sizeUidMap = Long.parseLong(getProperty(OPT_UID_MAP_SIZE));
-			} catch (Throwable t) {
-				throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_SIZE + "with value " + getProperty(OPT_UID_MAP_SIZE) + " into a Long value", t);
-			}
-			final Long sizeGidMap;
-			try {
-				sizeGidMap = Long.parseLong(getProperty(OPT_GID_MAP_SIZE));
-			} catch (Throwable t) {
-				throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_SIZE + "with value " + getProperty(OPT_GID_MAP_SIZE) + " into a Long value", t);
-			}
+		// System mounts
+		sb.append("#\n")
+				.append("# Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.\n")
+				.append("#\n")
+				.append("# This program and the accompanying materials are licensed under the terms\n")
+				.append("# of the Eclipse Public License v1.0, available at\n")
+				.append("# http://www.eclipse.org/legal/epl-v10.html\n")
+				.append("#\n")
+				.append("\n")
+				.append("# Container configuration file\n")
+				.append("#\n")
+				.append("# @author circlespainter\n");
 
-			// System mounts
-			out.println("#\n" +
-				"# Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.\n" +
-				"#\n" +
-				"# This program and the accompanying materials are licensed under the terms\n" +
-				"# of the Eclipse Public License v1.0, available at\n" +
-				"# http://www.eclipse.org/legal/epl-v10.html\n" +
-				"#\n" +
-				"\n" +
-				"# Container configuration file\n" +
-				"#\n" +
-				"# @author circlespainter\n");
+		// Distro includes
+		sb.append("\n## Distro includes\n");
+		sb.append("lxc.include = ").append(lxcConfig).append(SEP).append(getDistroType()).append(".common.conf\n");
+		sb.append("lxc.include = ").append(lxcConfig).append(SEP).append(getDistroType()).append(".userns.conf\n");
 
-			// Distro includes
-			out.println("\n## Distro includes");
-			out.println("lxc.include = " + lxcConfig + SEP + getDistroType() + ".common.conf");
-			out.println("lxc.include = " + lxcConfig + SEP + getDistroType() + ".userns.conf");
+		// User map
+		if (!privileged) {
+			sb.append("\n## Unprivileged container user map\n");
+			sb.append("lxc.id_map = u 0 ").append(uidMapStart).append(" ").append(sizeUidMap).append("\n")
+					.append("lxc.id_map = g 0 ").append(gidMapStart).append(" ").append(sizeGidMap).append("\n");
+		}
 
-			// User map
-			if (!privileged) {
-				out.println("\n## Unprivileged container user map");
-				out.println("lxc.id_map = u 0 " + uidMapStart + " " + sizeUidMap + "\n"
-					+ "lxc.id_map = g 0 " + gidMapStart + " " + sizeGidMap);
-			}
+		// System mounts
+		sb.append("\n## System mounts\n")
+				.append("lxc.mount.entry = ").append(SEP).append("sbin sbin none bind 0 0\n")
+				.append("lxc.mount.entry = ").append(SEP).append("usr usr none bind 0 0\n")
+				.append("lxc.mount.entry = ").append(SEP).append("bin bin none bind 0 0\n")
+				.append("lxc.mount.entry = ").append(SEP).append("lib lib none bind 0 0\n")
+				.append("lxc.mount.entry = ").append(SEP).append("lib64 lib64 none bind 0 0\n");
 
-			// System mounts
-			out.println("\n## System mounts\n" +
-				"lxc.mount.entry = " + SEP + "sbin sbin none bind 0 0\n" +
-				"lxc.mount.entry = " + SEP + "usr usr none bind 0 0\n" +
-				"lxc.mount.entry = " + SEP + "bin bin none bind 0 0\n" +
-				"lxc.mount.entry = " + SEP + "lib lib none bind 0 0\n" +
-				"lxc.mount.entry = " + SEP + "lib64 lib64 none bind 0 0\n");
+		// Capsule mounts
+		sb.append("\n## Capsule mounts\n");
+		getJavaHome(); // Find suitable Java
+		sb.append("lxc.mount.entry = ").append(origJavaHome).append(" ").append(CONTAINER_ABSOLUTE_JAVA_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
+		sb.append("lxc.mount.entry = ").append(getJarFile().getParent()).append(" ").append(CONTAINER_ABSOLUTE_JAR_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
+		if (isWrapperCapsule())
+			sb.append("lxc.mount.entry = ").append(findOwnJarFile().getParent()).append(" ").append(CONTAINER_ABSOLUTE_WRAPPER_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
+		sb.append("lxc.mount.entry = ").append(getWouldBeAppDir().toString()).append(" ").append(CONTAINER_ABSOLUTE_CAPSULE_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
+		if (localRepo != null)
+			sb.append("lxc.mount.entry = ").append(localRepo).append(" ").append(CONTAINER_ABSOLUTE_DEP_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
 
-			// Capsule mounts
-			out.println("\n## Capsule mounts");
-			getJavaHome(); // Find suitable Java
-			out.println("lxc.mount.entry = " + origJavaHome + " " + CONTAINER_ABSOLUTE_JAVA_HOME.toString().substring(1) + " none ro,bind 0 0");
-			out.println("lxc.mount.entry = " + getJarFile().getParent() + " " + CONTAINER_ABSOLUTE_JAR_HOME.toString().substring(1) + " none ro,bind 0 0");
-			if (isWrapperCapsule())
-				out.println("lxc.mount.entry = " + findOwnJarFile().getParent() + " " + CONTAINER_ABSOLUTE_WRAPPER_HOME.toString().substring(1) + " none ro,bind 0 0");
-			out.println("lxc.mount.entry = " + appDir() + " " + CONTAINER_ABSOLUTE_CAPSULE_HOME.toString().substring(1) + " none ro,bind 0 0");
-			if (localRepo != null)
-				out.println("lxc.mount.entry = " + localRepo + " " + CONTAINER_ABSOLUTE_DEP_HOME.toString().substring(1) + " none ro,bind 0 0");
+		// Console
+		sb.append("\n## Console\n");
+		sb.append("lxc.console = none\n"); // disable the main console
+		sb.append("lxc.pts = 1024\n"); // use a dedicated pts for the container (and limit the number of pseudo terminal available)
+		sb.append("lxc.tty = 1\n");        // no controlling tty at all
+		if (tty)
+			sb.append("lxc.mount.entry = dev").append(SEP).append("console ").append(SEP).append("dev").append(SEP).append("console none bind,rw 0 0\n");
 
-			// Console
-			out.println("\n## Console");
-			out.println("lxc.console = none"); // disable the main console
-			out.println("lxc.pts = 1024"); // use a dedicated pts for the container (and limit the number of pseudo terminal available)
-			out.println("lxc.tty = 1");        // no controlling tty at all
-			if (tty)
-				out.println("lxc.mount.entry = dev" + SEP + "console " + SEP + "dev" + SEP + "console none bind,rw 0 0");
+		// hostname
+		sb.append("\n## Hostname\n");
+		sb.append("lxc.utsname = ").append(hostname != null ? hostname : getAppId()).append("\n");
 
-			// hostname
-			out.println("\n## Hostname");
-			out.println("lxc.utsname = " + (hostname != null ? hostname : getAppId()));
+		// Network config
+		sb.append("\n## Network\n");
+		if ("veth".equals(networkType))
+			sb.append("lxc.network.type = veth\n")
+					.append("lxc.network.flags = up\n")
+					.append("lxc.network.link = ").append(networkBridge).append("\n")
+					.append("lxc.network.name = ").append(CONTAINER_NET_IFACE_NAME).append("\n");
+		else if ("host".equals(networkType))
+			sb.append("lxc.network.type = none");
+		else
+			sb.append("lxc.network.type = empty\n")
+					.append("lxc.network.flags = up\n");
 
-			// Network config
-			out.println("\n## Network");
-			if ("veth".equals(networkType))
-				out.println("lxc.network.type = veth\n"
-					+ "lxc.network.flags = up\n"
-					+ "lxc.network.link = " + networkBridge + "\n"
-					+ "lxc.network.name = " + CONTAINER_NET_IFACE_NAME);
-			else if ("host".equals(networkType))
-				out.println("lxc.network.type = none");
-			else
-				out.println("lxc.network.type = empty\n"
-					+ "lxc.network.flags = up");
+		// Perms
+		sb.append("\n## Perms\n");
+		if (privileged)
+			sb.append("lxc.cgroup.devices.allow = a\n");
+		else {
+			sb.append("lxc.cgroup.devices.deny = a\n"); // no implicit access to devices
 
-			// Perms
-			out.println("\n## Perms");
-			if (privileged)
-				out.println("lxc.cgroup.devices.allow = a");
-			else {
-				out.println("lxc.cgroup.devices.deny = a"); // no implicit access to devices
+			final List<String> allowedDevices = getOptionOrAttributeStringList(OPT_ALLOWED_DEVICES, ATTR_ALLOWED_DEVICES);
+			if (allowedDevices != null) {
+				for (String device : getAttribute(ATTR_ALLOWED_DEVICES))
+					sb.append("lxc.cgroup.devices.allow = ").append(device).append("\n");
+			} else {
+				sb.append("lxc.cgroup.devices.allow = c 1:3 rwm\n" // /dev/null
+						+ "lxc.cgroup.devices.allow = c 1:5 rwm\n");   // /dev/zero
 
-				final List<String> allowedDevices = getOptionOrAttributeStringList(OPT_ALLOWED_DEVICES, ATTR_ALLOWED_DEVICES);
-				if (allowedDevices != null) {
-					for (String device : getAttribute(ATTR_ALLOWED_DEVICES))
-						out.println("lxc.cgroup.devices.allow = " + device);
-				} else {
-					out.println("lxc.cgroup.devices.allow = c 1:3 rwm\n" // /dev/null
-						+ "lxc.cgroup.devices.allow = c 1:5 rwm");   // /dev/zero
-
-					out.println("lxc.cgroup.devices.allow = c 5:1 rwm\n" // dev/console
+				sb.append("lxc.cgroup.devices.allow = c 5:1 rwm\n" // dev/console
 						+ "lxc.cgroup.devices.allow = c 5:0 rwm\n" // dev/tty
 						+ "lxc.cgroup.devices.allow = c 4:0 rwm\n" // dev/tty0
-						+ "lxc.cgroup.devices.allow = c 4:1 rwm");
+						+ "lxc.cgroup.devices.allow = c 4:1 rwm\n");
 
-					out.println("lxc.cgroup.devices.allow = c 1:9 rwm\n" // /dev/urandom
-						+ "lxc.cgroup.devices.allow = c 1:8 rwm");   // /dev/random
+				sb.append("lxc.cgroup.devices.allow = c 1:9 rwm\n" // /dev/urandom
+						+ "lxc.cgroup.devices.allow = c 1:8 rwm\n");   // /dev/random
 
-					out.println("lxc.cgroup.devices.allow = c 136:* rwm\n" // dev/pts/*
-						+ "lxc.cgroup.devices.allow = c 5:2 rwm");     // dev/pts/ptmx
+				sb.append("lxc.cgroup.devices.allow = c 136:* rwm\n" // dev/pts/*
+						+ "lxc.cgroup.devices.allow = c 5:2 rwm\n");     // dev/pts/ptmx
 
-					out.println("lxc.cgroup.devices.allow = c 10:200 rwm");  // tuntap
-					// out.println("lxc.cgroup.devices.allow = c 10:229 rwm");
-					// out.println("lxc.cgroup.devices.allow = c 254:0 rwm");
-				}
+				sb.append("lxc.cgroup.devices.allow = c 10:200 rwm\n");  // tuntap
+				// out.println("lxc.cgroup.devices.allow = c 10:229 rwm");
+				// out.println("lxc.cgroup.devices.allow = c 254:0 rwm");
 			}
-			if (privileged)
-				out.println("lxc.aa_profile = unconfined");
-
-			// Security
-			out.println("\n## Security");
-			out.println("lxc.seccomp = " + lxcConfig + SEP + "common.seccomp"); // Blacklist some syscalls which are not safe in privileged containers
-
-			// see: http://man7.org/linux/man-pages/man7/capabilities.7.html
-			// see http://osdir.com/ml/lxc-chroot-linux-containers/2011-08/msg00117.html about the sys_admin capability
-			out.println("lxc.cap.drop = audit_control audit_write mac_admin mac_override mknod setfcap setpcap sys_boot sys_module sys_nice sys_pacct sys_rawio sys_resource sys_time sys_tty_config");
-			// out.println("lxc.cap.keep = audit_read block_suspend chown dac_override dac_read_search fowner fsetid ipc_lock ipc_owner "
-			//        + "kill lease linux_immutable net_admin net_bind_service net_broadcast net_raw setgid setuid sys_chroot sys_ptrace syslog");
-
-			// limits
-			out.println("\n## Limits");
-			final Long memLimit = getOptionOrAttributeLong(OPT_MEMORY_LIMIT, ATTR_MEMORY_LIMIT);
-			if (memLimit != null) {
-				int maxMem = memLimit.intValue();
-				out.println("lxc.cgroup.memory.limit_in_bytes = " + maxMem + "\n"
-					+ "lxc.cgroup.memory.soft_limit_in_bytes = " + maxMem + "\n"
-					+ "lxc.cgroup.memory.memsw.limit_in_bytes = " + getMemorySwap(maxMem, true));
-			}
-			final Long cpuShares = getOptionOrAttributeLong(OPT_CPU_SHARES, ATTR_CPU_SHARES);
-			if (cpuShares != null)
-				out.println("lxc.cgroup.cpu.shares = " + cpuShares);
-
-			out.println("\n## Misc");
-			out.println("lxc.kmsg = 0"); // kmsg unneeded, http://man7.org/linux/man-pages/man5/lxc.container.conf.5.html
-
-			out.println("\n## Root FS");
-			out.println("lxc.rootfs = " + getRootFSDir());
 		}
+		if (privileged)
+			sb.append("lxc.aa_profile = unconfined\n");
+
+		// Security
+		sb.append("\n## Security\n");
+		sb.append("lxc.seccomp = ").append(lxcConfig).append(SEP).append("common.seccomp\n"); // Blacklist some syscalls which are not safe in privileged containers
+
+		// see: http://man7.org/linux/man-pages/man7/capabilities.7.html
+		// see http://osdir.com/ml/lxc-chroot-linux-containers/2011-08/msg00117.html about the sys_admin capability
+		sb.append("lxc.cap.drop = audit_control audit_write mac_admin mac_override mknod setfcap setpcap sys_boot sys_module sys_nice sys_pacct sys_rawio sys_resource sys_time sys_tty_config\n");
+		// out.println("lxc.cap.keep = audit_read block_suspend chown dac_override dac_read_search fowner fsetid ipc_lock ipc_owner "
+		//        + "kill lease linux_immutable net_admin net_bind_service net_broadcast net_raw setgid setuid sys_chroot sys_ptrace syslog");
+
+		// limits
+		sb.append("\n## Limits\n");
+		final Long memLimit = getOptionOrAttributeLong(OPT_MEMORY_LIMIT, ATTR_MEMORY_LIMIT);
+		if (memLimit != null) {
+			int maxMem = memLimit.intValue();
+			sb.append("lxc.cgroup.memory.limit_in_bytes = ").append(maxMem).append("\n")
+					.append("lxc.cgroup.memory.soft_limit_in_bytes = ").append(maxMem).append("\n")
+					.append("lxc.cgroup.memory.memsw.limit_in_bytes = ").append(getMemorySwap(maxMem, true)).append("\n");
+		}
+		final Long cpuShares = getOptionOrAttributeLong(OPT_CPU_SHARES, ATTR_CPU_SHARES);
+		if (cpuShares != null)
+			sb.append("lxc.cgroup.cpu.shares = ").append(cpuShares).append("\n");
+
+		sb.append("\n## Misc\n");
+		sb.append("lxc.kmsg = 0\n"); // kmsg unneeded, http://man7.org/linux/man-pages/man5/lxc.container.conf.5.html
+
+		sb.append("\n## Root FS\n");
+		sb.append("lxc.rootfs = ").append(getRootFSDir()).append("\n");
+
+		return sb.toString();
 	}
 
 	private boolean isThereSuchContainerAlready() throws IOException, InterruptedException {
@@ -805,8 +832,18 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		return getContainerDir().resolve("rootfs");
 	}
 
-	private Path getConfFile() {
+	private Path getConfPath() {
 		return getContainerDir().resolve("config");
+	}
+
+	private Path getNetworkedPath() {
+		return getRootFSDir().resolve("networked");
+	}
+
+	private static void dump(String content, Path loc) throws IOException {
+		try (final PrintWriter out = new PrintWriter(new OutputStreamWriter(Files.newOutputStream(loc), Charset.defaultCharset()))) {
+			out.print(content);
+		}
 	}
 
 	private static String getDistroType() {
