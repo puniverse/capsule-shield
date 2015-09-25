@@ -175,11 +175,15 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 	}
 
+	@SuppressWarnings("deprecation")
 	@Override
 	protected final JMXServiceURL startJMXServer() {
 		// http://vafer.org/blog/20061010091658/
 		try {
-			final int namingPort = 8888; // TODO Randomize
+			int namingPort;
+			try(final ServerSocket s = new ServerSocket(0)) {
+				namingPort = s.getLocalPort();
+			}
 			log(LOG_VERBOSE, "Starting JMXConnectorServer");
 			final String ip = getVNetContainerIP();
 			final RMIServerSocketFactory serverFactory = new RMIServerSocketFactoryImpl(InetAddress.getByName(ip));
