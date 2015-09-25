@@ -61,8 +61,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
      * https://github.com/p8952/bocker
      */
 
-	private static final String SEP = File.separator;
-
+	//<editor-fold defaultstate="collapsed" desc="Constants">
 	private static final String PROP_JAVA_VERSION = "java.version";
 	private static final String PROP_JAVA_HOME = "java.home";
 	private static final String PROP_OS_NAME = "os.name";
@@ -70,47 +69,56 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
 	private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
 
-	private static final String PROP_UID_MAP_START = "capsule.shield.lxc.unprivileged.uidMapStart";
-	private static final String PROP_UID_MAP_START_DEFAULT = "100000";
-	private static final String PROP_GID_MAP_START = "capsule.shield.lxc.unprivileged.gidMapStart";
-	private static final String PROP_GID_MAP_START_DEFAULT = "100000";
-	private static final String PROP_UID_MAP_SIZE = "capsule.shield.lxc.unprivileged.uidMapSize";
-	private static final String PROP_UID_MAP_SIZE_DEFAULT = "65536";
-	private static final String PROP_GID_MAP_SIZE = "capsule.shield.lxc.unprivileged.gidMapSize";
-	private static final String PROP_GID_MAP_SIZE_DEFAULT = "65535";
-	private static final String PROP_LXC_PRIVILEGED = "capsule.shield.lxc.privileged";
-	private static final String PROP_LXC_PRIVILEGED_DEFAULT = "false";
-	private static final String PROP_LXC_SYSSHAREDIR = "capsule.shield.lxc.sysShareDir";
-	private static final String PROP_LXC_SYSSHAREDIR_DEFAULT = "/usr/share/lxc";
-
-	private static final String PROP_LXC_NETWORKING_TYPE = "capsule.shield.lxc.networkingType";
-	private static final Entry<String, String> ATTR_LXC_NETWORKING_TYPE = ATTRIBUTE("LXC-Networking-Type", T_STRING(), "veth", true, "");
-	private static final String PROP_LXC_NETWORK_BRIDGE = "capsule.shield.lxc.networkBridge";
-	private static final Entry<String, String> ATTR_LXC_NETWORK_BRIDGE = ATTRIBUTE("LXC-Network-Bridge", T_STRING(), "lxcbr0", true, "");
-	private static final String PROP_LXC_ALLOW_TTY =  "capsule.shield.lxc.allowTTY";
-	private static final Entry<String, Boolean> ATTR_LXC_ALLOW_TTY = ATTRIBUTE("LXC-Allow-TTY", T_BOOL(), false, true, "");
-
-	private static final String PROP_JMX = "capsule.shield.jmx";
-	private static final String PROP_HOSTNAME = "capsule.shield.hostname";
-	private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, "");
-	private static final String PROP_ALLOWED_DEVICES =  "capsule.shield.allowedDevices";
-	private static final Entry<String, List<String>> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_LIST(T_STRING()), null, true, "");
-	private static final String PROP_CPU_SHARES =  "capsule.shield.cpuShares";
-	private static final Entry<String, Long> ATTR_CPU_SHARES = ATTRIBUTE("CPU-Shares", T_LONG(), null, true, "");
-	private static final String PROP_MEMORY_LIMIT =  "capsule.shield.memoryLimit";
-	private static final Entry<String, Long> ATTR_MEMORY_LIMIT = ATTRIBUTE("Memory-Limit", T_LONG(), null, true, "");
-
+	private static final String CONTAINER_NET_IFACE_NAME = "eth0";
 	private static final String CONTAINER_NAME = "lxc";
+
+	private static final String SEP = File.separator;
 	private static final String HOST_APPCACHE_RELATIVE_CONTAINER_DIR_PARENT = "capsule-shield";
 	private static final String HOST_APPCACHE_RELATIVE_CONTAINER_DIR = HOST_APPCACHE_RELATIVE_CONTAINER_DIR_PARENT + SEP + CONTAINER_NAME;
-
 	private static final Path CONTAINER_ABSOLUTE_JAVA_HOME = Paths.get(SEP + "java");
 	private static final Path CONTAINER_ABSOLUTE_JAR_HOME = Paths.get(SEP + "capsule" + SEP + "jar");
 	private static final Path CONTAINER_ABSOLUTE_WRAPPER_HOME = Paths.get(SEP + "capsule" + SEP + "wrapper");
 	private static final Path CONTAINER_ABSOLUTE_CAPSULE_HOME = Paths.get(SEP + "capsule" + SEP + "app");
 	private static final Path CONTAINER_ABSOLUTE_DEP_HOME = Paths.get(SEP + "capsule" + SEP + "deps");
+	//</editor-fold>
 
-	private static final String CONTAINER_NET_IFACE_NAME = "eth0";
+	//<editor-fold defaultstate="collapsed" desc="Configuration">
+	private static final String OPT_UID_MAP_START = OPTION("capsule.shield.lxc.unprivileged.uidMapStart", "100000", null, false, "The first user ID in an unprivileged container");
+	private static final String OPT_GID_MAP_START = OPTION("capsule.shield.lxc.unprivileged.gidMapStart", "100000", null, false, "The first group ID in an unprivileged container");
+	private static final String OPT_UID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.uidMapSize", "65536", null, false, "The size of the consecutive user ID map in an unprivileged container");
+	private static final String OPT_GID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.gidMapSize", "65536", null, false, "The size of the consecutive group ID map in an unprivileged container");
+	private static final String OPT_LXC_PRIVILEGED = OPTION("capsule.shield.lxc.privileged", "false", null, false, "Whether the container should be privileged");
+	private static final String OPT_LXC_SYSSHAREDIR = OPTION("capsule.shield.lxc.sysShareDir", "/usr/share/lxc", null, false, "The location of the LXC toolchain's system-wide `share` directory");
+	private static final String OPT_JMX = OPTION("capsule.shield.jmx", "true", null, false, "Whether JMX will be proxied from the capsule parent process to the container");
+
+	private static final String LXC_NETWORKING_TYPE_DESC = "The LXC networking type to be configured";
+	private static final String OPT_LXC_NETWORKING_TYPE = OPTION("capsule.shield.lxc.networkingType", null, null, false, LXC_NETWORKING_TYPE_DESC);
+	private static final Entry<String, String> ATTR_LXC_NETWORKING_TYPE = ATTRIBUTE("LXC-Networking-Type", T_STRING(), "veth", true, LXC_NETWORKING_TYPE_DESC);
+
+	private static final String LXC_NETWORK_BRIDGE_DESC = "The name of the host bridge adapter for LXC networking";
+	private static final String OPT_LXC_NETWORK_BRIDGE = OPTION("capsule.shield.lxc.networkBridge", null, null, false, LXC_NETWORK_BRIDGE_DESC);
+	private static final Entry<String, String> ATTR_LXC_NETWORK_BRIDGE = ATTRIBUTE("LXC-Network-Bridge", T_STRING(), "lxcbr0", true, LXC_NETWORK_BRIDGE_DESC);
+
+	private static final String LXC_ALLOW_TTY_DESC = "whether the console device will be enabled in the container";
+	private static final String OPT_LXC_ALLOW_TTY = OPTION("capsule.shield.lxc.allowTTY", null, null, false, LXC_ALLOW_TTY_DESC);
+	private static final Entry<String, Boolean> ATTR_LXC_ALLOW_TTY = ATTRIBUTE("LXC-Allow-TTY", T_BOOL(), false, true, LXC_ALLOW_TTY_DESC);
+
+	private static final String HOSTNAME_DESC = "The host name assigned to the container";
+	private static final String OPT_HOSTNAME = OPTION("capsule.shield.hostname", null, null, false, HOSTNAME_DESC);
+	private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, HOSTNAME_DESC);
+
+	private static final String ALLOWED_DEVICES_DESC = "a list of additional allowed devices in an unprivileged container (example: `\"c 136:* rwm\" \"\"`";
+	private static final String OPT_ALLOWED_DEVICES = OPTION("capsule.shield.allowedDevices", null, null, false, ALLOWED_DEVICES_DESC);
+	private static final Entry<String, List<String>> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_LIST(T_STRING()), null, true, ALLOWED_DEVICES_DESC);
+
+	private static final String CPU_SHARES_DESC = "`cgroup` CPU shares";
+	private static final String OPT_CPU_SHARES = OPTION("capsule.shield.cpuShares", null, null, false, CPU_SHARES_DESC);
+	private static final Entry<String, Long> ATTR_CPU_SHARES = ATTRIBUTE("CPU-Shares", T_LONG(), null, true, CPU_SHARES_DESC);
+
+	private static final String MEM_SHARES_DESC = "`cgroup` memory shares";
+	private static final String OPT_MEMORY_LIMIT = OPTION("capsule.shield.memoryLimit", null, null, false, MEM_SHARES_DESC);
+	private static final Entry<String, Long> ATTR_MEMORY_LIMIT = ATTRIBUTE("Memory-Limit", T_LONG(), null, true, MEM_SHARES_DESC);
+	//</editor-fold>
 
 	private static String distroType;
 	private static Boolean isLXCInstalled;
@@ -133,7 +141,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	@SuppressWarnings("unchecked")
 	protected <T> T attribute(Map.Entry<String, T> attr) {
 		// TODO Understand why the agent doesn't work as a wrapper
-		if (ATTR_AGENT == attr && emptyOrTrue(System.getProperty(PROP_JMX)))
+		if (ATTR_AGENT == attr && emptyOrTrue(getProperty(OPT_JMX)))
 			return (T) Boolean.TRUE;
 		return super.attribute(attr);
 	}
@@ -197,7 +205,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 					new StringBuilder()
 							.append("service:jmx:").append("rmi://").append("/jndi/")
 							.append("rmi://").append(ip).append(':').append(namingPort)
-							.append("/" + UUID.randomUUID().toString());
+							.append("/").append(UUID.randomUUID().toString());
 
 			log(LOG_VERBOSE, "Starting management agent at " + url);
 
@@ -376,15 +384,15 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private void chownRootFS() throws IOException, InterruptedException {
 		final Long uidMapStart;
 		try {
-			uidMapStart = Long.parseLong(System.getProperty(PROP_UID_MAP_START, PROP_UID_MAP_START_DEFAULT));
+			uidMapStart = Long.parseLong(getProperty(OPT_UID_MAP_START));
 		} catch (Throwable t) {
-			throw new RuntimeException("Cannot parse sysprop " + PROP_UID_MAP_START + " into a Long value", t);
+			throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_START + " with value " + getProperty(OPT_UID_MAP_START) + " into a Long value", t);
 		}
 		final Long gidMapStart;
 		try {
-			gidMapStart = Long.parseLong(System.getProperty(PROP_GID_MAP_START, PROP_GID_MAP_START_DEFAULT));
+			gidMapStart = Long.parseLong(getProperty(OPT_GID_MAP_START));
 		} catch (Throwable t) {
-			throw new RuntimeException("Cannot parse sysprop " + PROP_GID_MAP_START + " into a Long value", t);
+			throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_START + "with value " + getProperty(OPT_GID_MAP_START) + " into a Long value", t);
 		}
 
 		final Long currentUID = getCurrentUID();
@@ -404,40 +412,39 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(getConfFile(), StandardOpenOption.CREATE))) {
 
-			final String lxcConfig = System.getProperty(PROP_LXC_SYSSHAREDIR, PROP_LXC_SYSSHAREDIR_DEFAULT) + SEP + "config";
+			final String lxcConfig = getProperty(OPT_LXC_SYSSHAREDIR) + SEP + "config";
 			boolean privileged = false;
 			try {
-				privileged = Boolean.parseBoolean(System.getProperty(PROP_LXC_PRIVILEGED, PROP_LXC_PRIVILEGED_DEFAULT));
+				privileged = Boolean.parseBoolean(getProperty(OPT_LXC_PRIVILEGED));
 			} catch (Throwable ignored) {}
-			final String networkType = getPropertyOrAttributeString(PROP_LXC_NETWORKING_TYPE, ATTR_LXC_NETWORKING_TYPE);
-			final String networkBridge = getPropertyOrAttributeString(PROP_LXC_NETWORK_BRIDGE, ATTR_LXC_NETWORK_BRIDGE);
-			boolean tty = getPropertyOrAttributeBool(PROP_LXC_ALLOW_TTY, ATTR_LXC_ALLOW_TTY);
-			final String hostname = getPropertyOrAttributeString(PROP_HOSTNAME, ATTR_HOSTNAME);
+			final String networkType = getOptionOrAttributeString(OPT_LXC_NETWORKING_TYPE, ATTR_LXC_NETWORKING_TYPE);
+			final String networkBridge = getOptionOrAttributeString(OPT_LXC_NETWORK_BRIDGE, ATTR_LXC_NETWORK_BRIDGE);
+			boolean tty = getOptionOrAttributeBool(OPT_LXC_ALLOW_TTY, ATTR_LXC_ALLOW_TTY);
+			final String hostname = getOptionOrAttributeString(OPT_HOSTNAME, ATTR_HOSTNAME);
 			final Long uidMapStart;
 			try {
-				uidMapStart = Long.parseLong(System.getProperty(PROP_UID_MAP_START, PROP_UID_MAP_START_DEFAULT));
+				uidMapStart = Long.parseLong(getProperty(OPT_UID_MAP_START));
 			} catch (Throwable t) {
-				throw new RuntimeException("Cannot parse sysprop " + PROP_UID_MAP_START + " into a Long value", t);
+				throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_START + "with value " + getProperty(OPT_UID_MAP_START) + "  into a Long value", t);
 			}
 			final Long gidMapStart;
 			try {
-				gidMapStart = Long.parseLong(System.getProperty(PROP_GID_MAP_START, PROP_GID_MAP_START_DEFAULT));
+				gidMapStart = Long.parseLong(getProperty(OPT_GID_MAP_START));
 			} catch (Throwable t) {
-				throw new RuntimeException("Cannot parse sysprop " + PROP_GID_MAP_START + " into a Long value", t);
+				throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_START + "with value " + getProperty(OPT_GID_MAP_START) + "  into a Long value", t);
 			}
 			final Long sizeUidMap;
 			try {
-				sizeUidMap = Long.parseLong(System.getProperty(PROP_UID_MAP_SIZE, PROP_UID_MAP_SIZE_DEFAULT));
+				sizeUidMap = Long.parseLong(getProperty(OPT_UID_MAP_SIZE));
 			} catch (Throwable t) {
-				throw new RuntimeException("Cannot parse sysprop " + PROP_UID_MAP_SIZE + " into a Long value", t);
+				throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_SIZE + "with value " + getProperty(OPT_UID_MAP_SIZE) + " into a Long value", t);
 			}
 			final Long sizeGidMap;
 			try {
-				sizeGidMap = Long.parseLong(System.getProperty(PROP_GID_MAP_SIZE, PROP_GID_MAP_SIZE_DEFAULT));
+				sizeGidMap = Long.parseLong(getProperty(OPT_GID_MAP_SIZE));
 			} catch (Throwable t) {
-				throw new RuntimeException("Cannot parse sysprop " + PROP_GID_MAP_SIZE + " into a Long value", t);
+				throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_SIZE + "with value " + getProperty(OPT_GID_MAP_SIZE) + " into a Long value", t);
 			}
-
 
 			// System mounts
 			out.println("#\n" +
@@ -515,7 +522,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			else {
 				out.println("lxc.cgroup.devices.deny = a"); // no implicit access to devices
 
-				final List<String> allowedDevices = getPropertyOrAttributeStringList(PROP_ALLOWED_DEVICES, ATTR_ALLOWED_DEVICES);
+				final List<String> allowedDevices = getOptionOrAttributeStringList(OPT_ALLOWED_DEVICES, ATTR_ALLOWED_DEVICES);
 				if (allowedDevices != null) {
 					for (String device : getAttribute(ATTR_ALLOWED_DEVICES))
 						out.println("lxc.cgroup.devices.allow = " + device);
@@ -554,14 +561,14 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 			// limits
 			out.println("\n## Limits");
-			final Long memLimit = getPropertyOrAttributeLong(PROP_MEMORY_LIMIT, ATTR_MEMORY_LIMIT);
+			final Long memLimit = getOptionOrAttributeLong(OPT_MEMORY_LIMIT, ATTR_MEMORY_LIMIT);
 			if (memLimit != null) {
 				int maxMem = memLimit.intValue();
 				out.println("lxc.cgroup.memory.limit_in_bytes = " + maxMem + "\n"
 					+ "lxc.cgroup.memory.soft_limit_in_bytes = " + maxMem + "\n"
 					+ "lxc.cgroup.memory.memsw.limit_in_bytes = " + getMemorySwap(maxMem, true));
 			}
-			final Long cpuShares = getPropertyOrAttributeLong(PROP_CPU_SHARES, ATTR_CPU_SHARES);
+			final Long cpuShares = getOptionOrAttributeLong(OPT_CPU_SHARES, ATTR_CPU_SHARES);
 			if (cpuShares != null)
 				out.println("lxc.cgroup.cpu.shares = " + cpuShares);
 
@@ -646,22 +653,22 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 	}
 
-	private String getPropertyOrAttributeString(String propName, Map.Entry<String, String> attr) {
-		final String propValue = System.getProperty(propName);
+	private String getOptionOrAttributeString(String propName, Map.Entry<String, String> attr) {
+		final String propValue = getProperty(propName);
 		if (propValue == null)
 			return getAttribute(attr);
 		return propValue;
 	}
 
-	private List<String> getPropertyOrAttributeStringList(String propName, Map.Entry<String, List<String>> attr) {
-		final String propValue = System.getProperty(propName);
+	private List<String> getOptionOrAttributeStringList(String propName, Map.Entry<String, List<String>> attr) {
+		final String propValue = getProperty(propName);
 		if (propValue == null)
 			return getAttribute(attr);
 		return Arrays.asList(propValue.split(":"));
 	}
 
-	private Long getPropertyOrAttributeLong(String propName, Map.Entry<String, Long> attr) {
-		final String propValue = System.getProperty(propName);
+	private Long getOptionOrAttributeLong(String propName, Map.Entry<String, Long> attr) {
+		final String propValue = getProperty(propName);
 		if (propValue == null)
 			return getAttribute(attr);
 		try {
@@ -671,8 +678,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 	}
 
-	private Boolean getPropertyOrAttributeBool(String propName, Map.Entry<String, Boolean> attr) {
-		final String propValue = System.getProperty(propName);
+	private Boolean getOptionOrAttributeBool(String propName, Map.Entry<String, Boolean> attr) {
+		final String propValue = getProperty(propName);
 		if (propValue == null)
 			return getAttribute(attr);
 		try {
@@ -816,9 +823,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	private static boolean emptyOrTrue(String value) {
-		if (value == null)
-			return false;
-		return value.isEmpty() || Boolean.parseBoolean(value);
+		return value != null && (value.isEmpty() || Boolean.parseBoolean(value));
 	}
 
 	private String getVNetHostIP() throws SocketException {
