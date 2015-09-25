@@ -180,7 +180,6 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		// http://vafer.org/blog/20061010091658/
 		try {
 			final int namingPort = 8888; // TODO Randomize
-			final int protocolPort = 8889; // TODO Randomize
 			log(LOG_VERBOSE, "Starting JMXConnectorServer");
 			final String ip = getVNetContainerIP();
 			final RMIServerSocketFactory serverFactory = new RMIServerSocketFactoryImpl(InetAddress.getByName(ip));
@@ -188,10 +187,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			LocateRegistry.createRegistry(namingPort, null, serverFactory);
 
 			final StringBuilder url =
-				new StringBuilder()
-					.append("service:jmx:").append("rmi://").append(ip).append(':').append(protocolPort).append("/jndi/")
-					.append("rmi://").append(ip).append(':').append(namingPort).append("/connector")
-					.append("/" + UUID.randomUUID().toString());
+					new StringBuilder()
+							.append("service:jmx:").append("rmi://").append("/jndi/")
+							.append("rmi://").append(ip).append(':').append(namingPort)
+							.append("/" + UUID.randomUUID().toString());
 
 			log(LOG_VERBOSE, "Starting management agent at " + url);
 
