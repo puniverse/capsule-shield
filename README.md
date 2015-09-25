@@ -39,6 +39,7 @@ The following additional manifest entries and capsule options can be used to cus
     * `LXC-Network-Bridge`: the name of the host bridge adapter for LXC networking (default: `lxcbr0`). The `capsule.shield.lxc.networkBridge` capsule option can override it.
     * `LXC-Allow-TTY`: whether the console device will be enabled in the container (default: `false`). The `capsule.shield.lxc.allowTTY` capsule option can override it.
     * `Hostname`: the host name assigned to the container (default: _none_). The `capsule.shield.hostname` capsule option can override it.
+    * `Set-Default-GW`: whether the default gateway should be set in order to grant internet access to the container (default: `true`). The `capsule.shield.setDefaultGW` capsule option can override it.
     * `Memory-Limit`: `cgroup` memory limit (default: _none_). The `capsule.shield.memoryLimit` capsule option can override it.
     * `CPU-Shares`: `cgroup` cpu shares (default: _none_). The `capsule.shield.cpuShares` capsule option can override it.
 

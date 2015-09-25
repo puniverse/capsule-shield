@@ -99,6 +99,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String OPT_LXC_NETWORK_BRIDGE = OPTION("capsule.shield.lxc.networkBridge", null, null, false, LXC_NETWORK_BRIDGE_DESC);
 	private static final Entry<String, String> ATTR_LXC_NETWORK_BRIDGE = ATTRIBUTE("LXC-Network-Bridge", T_STRING(), "lxcbr0", true, LXC_NETWORK_BRIDGE_DESC);
 
+	private static final String SET_DEFAULT_GW_DESC = "Whether the default gateway should be set in order to grant internet access to the container";
+	private static final String OPT_SET_DEFAULT_GW = OPTION("capsule.shield.setDefaultGW", null, null, false, SET_DEFAULT_GW_DESC);
+	private static final Entry<String, Boolean> ATTR_SET_DEFAULT_GW = ATTRIBUTE("Set-Default-Gateway", T_BOOL(), true, true, SET_DEFAULT_GW_DESC);
+
 	private static final String LXC_ALLOW_TTY_DESC = "whether the console device will be enabled in the container";
 	private static final String OPT_LXC_ALLOW_TTY = OPTION("capsule.shield.lxc.allowTTY", null, null, false, LXC_ALLOW_TTY_DESC);
 	private static final Entry<String, Boolean> ATTR_LXC_ALLOW_TTY = ATTRIBUTE("LXC-Allow-TTY", T_BOOL(), false, true, LXC_ALLOW_TTY_DESC);
@@ -128,6 +132,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private Path origJavaHome;
 	private Path localRepo;
 
+	private Inet4Address vnetHostIPv4;
+	private Inet4Address vnetContainerIPv4;
+
 	public ShieldedCapsule(Capsule pred) {
 		super(pred);
 
@@ -140,7 +147,6 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	@Override
 	@SuppressWarnings("unchecked")
 	protected <T> T attribute(Map.Entry<String, T> attr) {
-		// TODO Understand why the agent doesn't work as a wrapper
 		if (ATTR_AGENT == attr && emptyOrTrue(getProperty(OPT_JMX)))
 			return (T) Boolean.TRUE;
 		return super.attribute(attr);
@@ -186,6 +192,19 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 	}
 
+	@Override
+	protected final void liftoff() {
+		if (getOptionOrAttributeBool(OPT_SET_DEFAULT_GW, ATTR_SET_DEFAULT_GW)) {
+			try {
+				log(LOG_VERBOSE, "Setting the default gateway for the container to " + getVNetHostIPv4().getHostAddress());
+				exec("lxc-attach", "-P", getContainerParentDir().toString(), "-n", "lxc", "--", "/sbin/route", "add", "default", "gw", getVNetHostIPv4().getHostAddress());
+			} catch (IOException e) {
+				log(LOG_QUIET, "Couldn't enable internet: " + e.getMessage());
+				log(LOG_QUIET, e);
+			}
+		}
+	}
+
 	@SuppressWarnings("deprecation")
 	@Override
 	protected final JMXServiceURL startJMXServer() {
@@ -196,7 +215,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 				namingPort = s.getLocalPort();
 			}
 			log(LOG_VERBOSE, "Starting JMXConnectorServer");
-			final String ip = getVNetContainerIP();
+			final String ip = getVNetContainerIPv4().getHostAddress();
 			final RMIServerSocketFactory serverFactory = new RMIServerSocketFactoryImpl(InetAddress.getByName(ip));
 
 			LocateRegistry.createRegistry(namingPort, null, serverFactory);
@@ -234,9 +253,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		if (idx >= 0) {
 			command.remove(idx);
 			try {
-				command.add(idx, "-Dcapsule.address=" + getVNetHostIP());
+				command.add(idx, "-Dcapsule.address=" + getVNetHostIPv4().getHostAddress());
 				return true;
 			} catch (SocketException e) {
+				log(LOG_QUIET, "Couldn't setup the agent communication link: " + e.getMessage());
 				log(LOG_QUIET, e);
 				return false;
 			}
@@ -826,26 +846,30 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		return value != null && (value.isEmpty() || Boolean.parseBoolean(value));
 	}
 
-	private String getVNetHostIP() throws SocketException {
+	private Inet4Address getVNetHostIPv4() throws SocketException {
 		// TODO IPv6
-		final Enumeration<InetAddress> vas = NetworkInterface.getByName(getAttribute(ATTR_LXC_NETWORK_BRIDGE)).getInetAddresses();
-		while (vas.hasMoreElements()) {
-			final InetAddress ia = vas.nextElement();
-			if (ia instanceof Inet4Address)
-				return ia.getHostAddress();
+		if (vnetHostIPv4 == null) {
+			final Enumeration<InetAddress> vas = NetworkInterface.getByName(getAttribute(ATTR_LXC_NETWORK_BRIDGE)).getInetAddresses();
+			while (vas.hasMoreElements()) {
+				final InetAddress ia = vas.nextElement();
+				if (ia instanceof Inet4Address)
+					vnetHostIPv4 = (Inet4Address) ia;
+			}
 		}
-		return null;
+		return vnetHostIPv4;
 	}
 
-	private String getVNetContainerIP() throws SocketException {
+	private Inet4Address getVNetContainerIPv4() throws SocketException {
 		// TODO IPv6
-		final Enumeration<InetAddress> vas = NetworkInterface.getByName(CONTAINER_NET_IFACE_NAME).getInetAddresses();
-		while (vas.hasMoreElements()) {
-			final InetAddress ia = vas.nextElement();
-			if (ia instanceof Inet4Address)
-				return ia.getHostAddress();
+		if (vnetContainerIPv4 == null) {
+			final Enumeration<InetAddress> vas = NetworkInterface.getByName(CONTAINER_NET_IFACE_NAME).getInetAddresses();
+			while (vas.hasMoreElements()) {
+				final InetAddress ia = vas.nextElement();
+				if (ia instanceof Inet4Address)
+					vnetContainerIPv4 = (Inet4Address) ia;
+			}
 		}
-		return null;
+		return vnetContainerIPv4;
 	}
 	//</editor-fold>
 
