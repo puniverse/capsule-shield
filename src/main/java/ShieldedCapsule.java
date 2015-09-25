@@ -170,6 +170,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			localAddress = pAddress;
 		}
 
+		@Override
 		public ServerSocket createServerSocket(int pPort) throws IOException  {
 			return ServerSocketFactory.getDefault().createServerSocket(pPort, 0, localAddress);
 		}
@@ -853,10 +854,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//<editor-fold defaultstate="collapsed" desc="NameService">
 	/////////// NameService ///////////////////////////////////
 	private static void setLinkNameService() {
-		String newv = "dns,shield";
+		final String newv = "dns,shield";
 		for (int i = 1; ; i++) {
-			String prop = PROP_PREFIX_NAMESERVICE + i;
-			String oldv = System.getProperty(prop);
+			final String prop = PROP_PREFIX_NAMESERVICE + i;
+			final String oldv = System.getProperty(prop);
 			System.setProperty(prop, newv);
 			if (oldv == null || oldv.isEmpty())
 				break;
