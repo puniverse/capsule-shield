@@ -99,6 +99,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String OPT_LXC_NETWORK_BRIDGE = OPTION("capsule.shield.lxc.networkBridge", null, null, false, LXC_NETWORK_BRIDGE_DESC);
 	private static final Entry<String, String> ATTR_LXC_NETWORK_BRIDGE = ATTRIBUTE("LXC-Network-Bridge", T_STRING(), "lxcbr0", true, LXC_NETWORK_BRIDGE_DESC);
 
+	private static final String STATIC_IP_DESC = "An optional static IP to be assigned to the container (the default is using DHCP)";
+	private static final String OPT_STATIC_IP = OPTION("capsule.shield.staticIP", null, null, false, STATIC_IP_DESC);
+	private static final Entry<String, String> ATTR_STATIC_IP = ATTRIBUTE("Static-IP", T_STRING(), null, true, STATIC_IP_DESC);
+
 	private static final String SET_DEFAULT_GW_DESC = "Whether the default gateway should be set in order to grant internet access to the container";
 	private static final String OPT_SET_DEFAULT_GW = OPTION("capsule.shield.setDefaultGW", null, null, false, SET_DEFAULT_GW_DESC);
 	private static final Entry<String, Boolean> ATTR_SET_DEFAULT_GW = ATTRIBUTE("Set-Default-Gateway", T_BOOL(), true, true, SET_DEFAULT_GW_DESC);
@@ -366,6 +370,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		final Path networked = ret.resolve("networked");
 		Files.createFile(networked, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxrwxr-x")));
 		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(networked, StandardOpenOption.APPEND))) {
+			final String staticIP = getOptionOrAttributeString(OPT_STATIC_IP, ATTR_STATIC_IP);
 			out.println (
 				"#!/bin/bash\n" +
 				"\n" +
@@ -381,18 +386,21 @@ public class ShieldedCapsule extends Capsule implements NameService {
 				"#\n" +
 				"# @author circlespainter\n" +
 				"\n" +
+				"export JAVA_HOME=/java\n" +
 				"/sbin/ifconfig lo 127.0.0.1\n" +
 				"/sbin/route add -net 127.0.0.0 netmask 255.0.0.0 lo\n" +
-				"/sbin/dhclient\n" +
-				"export JAVA_HOME=/java\n" +
+				(staticIP == null ? "/sbin/dhclient\n" : "") +
+				(staticIP != null ? "/sbin/ifconfig " + CONTAINER_NET_IFACE_NAME + " " + staticIP + "\n" : "") +
 				"\"$@\"\n" +
 				"RET=$?\n" +
-				"if [ -f \"/run/dhclient.pid\" ]; then\n" +
-				"    DHCLIENT_PID=`/bin/cat /run/dhclient.pid`;\n" +
-				"    if [ -n $DHCLIENT_PID ]; then\n" +
-				"        /bin/kill `/bin/cat /run/dhclient.pid`;\n" +
-				"    fi\n" +
-				"fi\n" +
+				(staticIP == null ?
+					"if [ -f \"/run/dhclient.pid\" ]; then\n" +
+					"    DHCLIENT_PID=`/bin/cat /run/dhclient.pid`;\n" +
+					"    if [ -n $DHCLIENT_PID ]; then\n" +
+					"        /bin/kill `/bin/cat /run/dhclient.pid`;\n" +
+					"    fi\n" +
+					"fi\n" :
+					"") +
 				"exit $RET\n"
 			);
 		}
