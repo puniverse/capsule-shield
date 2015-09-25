@@ -110,6 +110,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final Path CONTAINER_ABSOLUTE_CAPSULE_HOME = Paths.get(SEP + "capsule" + SEP + "app");
 	private static final Path CONTAINER_ABSOLUTE_DEP_HOME = Paths.get(SEP + "capsule" + SEP + "deps");
 
+	private static final String CONTAINER_NET_IFACE_NAME = "eth0";
+
 	private static String distroType;
 	private static Boolean isLXCInstalled;
 	private static Path hostAbsoluteContainerDir;
@@ -499,7 +501,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 				out.println("lxc.network.type = veth\n"
 					+ "lxc.network.flags = up\n"
 					+ "lxc.network.link = " + networkBridge + "\n"
-					+ "lxc.network.name = eth0");
+					+ "lxc.network.name = " + CONTAINER_NET_IFACE_NAME);
 			else if ("host".equals(networkType))
 				out.println("lxc.network.type = none");
 			else
@@ -820,8 +822,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	private String getVNetHostIP() throws SocketException {
-		// TODO Get from conf
-		final Enumeration<InetAddress> vas = NetworkInterface.getByName("lxcbr0").getInetAddresses();
+		// TODO IPv6
+		final Enumeration<InetAddress> vas = NetworkInterface.getByName(getAttribute(ATTR_LXC_NETWORK_BRIDGE)).getInetAddresses();
 		while (vas.hasMoreElements()) {
 			final InetAddress ia = vas.nextElement();
 			if (ia instanceof Inet4Address)
@@ -831,8 +833,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	private String getVNetContainerIP() throws SocketException {
-		// TODO Get from conf
-		final Enumeration<InetAddress> vas = NetworkInterface.getByName("eth0").getInetAddresses();
+		// TODO IPv6
+		final Enumeration<InetAddress> vas = NetworkInterface.getByName(CONTAINER_NET_IFACE_NAME).getInetAddresses();
 		while (vas.hasMoreElements()) {
 			final InetAddress ia = vas.nextElement();
 			if (ia instanceof Inet4Address)
