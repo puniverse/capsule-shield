@@ -65,8 +65,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String PROP_JAVA_VERSION = "java.version";
 	private static final String PROP_JAVA_HOME = "java.home";
 	private static final String PROP_OS_NAME = "os.name";
-	private static final String PROP_DOMAIN = "sun.net.spi.nameservice.domain";
-	private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
+	// private static final String PROP_DOMAIN = "sun.net.spi.nameservice.domain";
+	// private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
 	private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
 
 	private static final String CONTAINER_NET_IFACE_NAME = "eth0";
@@ -502,36 +502,35 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 		// System mounts
 		sb.append("#\n")
-				.append("# Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.\n")
-				.append("#\n")
-				.append("# This program and the accompanying materials are licensed under the terms\n")
-				.append("# of the Eclipse Public License v1.0, available at\n")
-				.append("# http://www.eclipse.org/legal/epl-v10.html\n")
-				.append("#\n")
-				.append("\n")
-				.append("# Container configuration file\n")
-				.append("#\n")
-				.append("# @author circlespainter\n");
+			.append("# Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.\n")
+			.append("#\n")
+			.append("# This program and the accompanying materials are licensed under the terms\n")
+			.append("# of the Eclipse Public License v1.0, available at\n")
+			.append("# http://www.eclipse.org/legal/epl-v10.html\n")
+			.append("#\n")
+			.append("\n")
+			.append("# Container configuration file\n")
+			.append("#\n")
+			.append("# @author circlespainter\n");
 
 		// Distro includes
-		sb.append("\n## Distro includes\n");
-		sb.append("lxc.include = ").append(lxcConfig).append(SEP).append(getDistroType()).append(".common.conf\n");
-		sb.append("lxc.include = ").append(lxcConfig).append(SEP).append(getDistroType()).append(".userns.conf\n");
+		sb.append("\n## Distro includes\n")
+			.append("lxc.include = ").append(lxcConfig).append(SEP).append(getDistroType()).append(".common.conf\n")
+			.append("lxc.include = ").append(lxcConfig).append(SEP).append(getDistroType()).append(".userns.conf\n");
 
 		// User map
-		if (!privileged) {
-			sb.append("\n## Unprivileged container user map\n");
-			sb.append("lxc.id_map = u 0 ").append(uidMapStart).append(" ").append(sizeUidMap).append("\n")
-					.append("lxc.id_map = g 0 ").append(gidMapStart).append(" ").append(sizeGidMap).append("\n");
-		}
+		if (!privileged)
+			sb.append("\n## Unprivileged container user map\n")
+				.append("lxc.id_map = u 0 ").append(uidMapStart).append(" ").append(sizeUidMap).append("\n")
+				.append("lxc.id_map = g 0 ").append(gidMapStart).append(" ").append(sizeGidMap).append("\n");
 
 		// System mounts
 		sb.append("\n## System mounts\n")
-				.append("lxc.mount.entry = ").append(SEP).append("sbin sbin none bind 0 0\n")
-				.append("lxc.mount.entry = ").append(SEP).append("usr usr none bind 0 0\n")
-				.append("lxc.mount.entry = ").append(SEP).append("bin bin none bind 0 0\n")
-				.append("lxc.mount.entry = ").append(SEP).append("lib lib none bind 0 0\n")
-				.append("lxc.mount.entry = ").append(SEP).append("lib64 lib64 none bind 0 0\n");
+			.append("lxc.mount.entry = ").append(SEP).append("sbin sbin none bind 0 0\n")
+			.append("lxc.mount.entry = ").append(SEP).append("usr usr none bind 0 0\n")
+			.append("lxc.mount.entry = ").append(SEP).append("bin bin none bind 0 0\n")
+			.append("lxc.mount.entry = ").append(SEP).append("lib lib none bind 0 0\n")
+			.append("lxc.mount.entry = ").append(SEP).append("lib64 lib64 none bind 0 0\n");
 
 		// Capsule mounts
 		sb.append("\n## Capsule mounts\n");
@@ -545,29 +544,29 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			sb.append("lxc.mount.entry = ").append(localRepo).append(" ").append(CONTAINER_ABSOLUTE_DEP_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
 
 		// Console
-		sb.append("\n## Console\n");
-		sb.append("lxc.console = none\n"); // disable the main console
-		sb.append("lxc.pts = 1024\n"); // use a dedicated pts for the container (and limit the number of pseudo terminal available)
-		sb.append("lxc.tty = 1\n");        // no controlling tty at all
+		sb.append("\n## Console\n")
+			.append("lxc.console = none\n") // disable the main console
+			.append("lxc.pts = 1024\n")     // use a dedicated pts for the container (and limit the number of pseudo terminal available)
+			.append("lxc.tty = 1\n");       // no controlling tty at all
 		if (tty)
 			sb.append("lxc.mount.entry = dev").append(SEP).append("console ").append(SEP).append("dev").append(SEP).append("console none bind,rw 0 0\n");
 
 		// hostname
-		sb.append("\n## Hostname\n");
-		sb.append("lxc.utsname = ").append(hostname != null ? hostname : getAppId()).append("\n");
+		sb.append("\n## Hostname\n")
+			.append("lxc.utsname = ").append(hostname != null ? hostname : getAppId()).append("\n");
 
 		// Network config
 		sb.append("\n## Network\n");
 		if ("veth".equals(networkType))
 			sb.append("lxc.network.type = veth\n")
-					.append("lxc.network.flags = up\n")
-					.append("lxc.network.link = ").append(networkBridge).append("\n")
-					.append("lxc.network.name = ").append(CONTAINER_NET_IFACE_NAME).append("\n");
+				.append("lxc.network.flags = up\n")
+				.append("lxc.network.link = ").append(networkBridge).append("\n")
+				.append("lxc.network.name = ").append(CONTAINER_NET_IFACE_NAME).append("\n");
 		else if ("host".equals(networkType))
 			sb.append("lxc.network.type = none");
 		else
 			sb.append("lxc.network.type = empty\n")
-					.append("lxc.network.flags = up\n");
+				.append("lxc.network.flags = up\n");
 
 		// Perms
 		sb.append("\n## Perms\n");
@@ -581,35 +580,30 @@ public class ShieldedCapsule extends Capsule implements NameService {
 				for (String device : getAttribute(ATTR_ALLOWED_DEVICES))
 					sb.append("lxc.cgroup.devices.allow = ").append(device).append("\n");
 			} else {
-				sb.append("lxc.cgroup.devices.allow = c 1:3 rwm\n" // /dev/null
-						+ "lxc.cgroup.devices.allow = c 1:5 rwm\n");   // /dev/zero
-
-				sb.append("lxc.cgroup.devices.allow = c 5:1 rwm\n" // dev/console
-						+ "lxc.cgroup.devices.allow = c 5:0 rwm\n" // dev/tty
-						+ "lxc.cgroup.devices.allow = c 4:0 rwm\n" // dev/tty0
-						+ "lxc.cgroup.devices.allow = c 4:1 rwm\n");
-
-				sb.append("lxc.cgroup.devices.allow = c 1:9 rwm\n" // /dev/urandom
-						+ "lxc.cgroup.devices.allow = c 1:8 rwm\n");   // /dev/random
-
-				sb.append("lxc.cgroup.devices.allow = c 136:* rwm\n" // dev/pts/*
-						+ "lxc.cgroup.devices.allow = c 5:2 rwm\n");     // dev/pts/ptmx
-
-				sb.append("lxc.cgroup.devices.allow = c 10:200 rwm\n");  // tuntap
-				// out.println("lxc.cgroup.devices.allow = c 10:229 rwm");
-				// out.println("lxc.cgroup.devices.allow = c 254:0 rwm");
+				sb.append("lxc.cgroup.devices.allow = c 1:3 rwm\n")       // /dev/null
+					.append("lxc.cgroup.devices.allow = c 1:5 rwm\n")     // /dev/zero
+					.append("lxc.cgroup.devices.allow = c 5:1 rwm\n")     // dev/console
+					.append("lxc.cgroup.devices.allow = c 5:0 rwm\n")     // dev/tty
+					.append("lxc.cgroup.devices.allow = c 4:0 rwm\n")     // dev/tty0
+					.append("lxc.cgroup.devices.allow = c 4:1 rwm\n")
+					.append("lxc.cgroup.devices.allow = c 1:9 rwm\n")     // /dev/urandom
+					.append("lxc.cgroup.devices.allow = c 1:8 rwm\n")     // /dev/random
+					.append("lxc.cgroup.devices.allow = c 136:* rwm\n")   // dev/pts/*
+					.append("lxc.cgroup.devices.allow = c 5:2 rwm\n")     // dev/pts/ptmx
+					.append("lxc.cgroup.devices.allow = c 10:200 rwm\n"); // tuntap
+					// .append("lxc.cgroup.devices.allow = c 10:229 rwm")
+					// .append("lxc.cgroup.devices.allow = c 254:0 rwm");
 			}
 		}
 		if (privileged)
 			sb.append("lxc.aa_profile = unconfined\n");
 
 		// Security
-		sb.append("\n## Security\n");
-		sb.append("lxc.seccomp = ").append(lxcConfig).append(SEP).append("common.seccomp\n"); // Blacklist some syscalls which are not safe in privileged containers
-
+		sb.append("\n## Security\n")
+			.append("lxc.seccomp = ").append(lxcConfig).append(SEP).append("common.seccomp\n") // Blacklist some syscalls which are not safe in privileged containers
 		// see: http://man7.org/linux/man-pages/man7/capabilities.7.html
 		// see http://osdir.com/ml/lxc-chroot-linux-containers/2011-08/msg00117.html about the sys_admin capability
-		sb.append("lxc.cap.drop = audit_control audit_write mac_admin mac_override mknod setfcap setpcap sys_boot sys_module sys_nice sys_pacct sys_rawio sys_resource sys_time sys_tty_config\n");
+			.append("lxc.cap.drop = audit_control audit_write mac_admin mac_override mknod setfcap setpcap sys_boot sys_module sys_nice sys_pacct sys_rawio sys_resource sys_time sys_tty_config\n");
 		// out.println("lxc.cap.keep = audit_read block_suspend chown dac_override dac_read_search fowner fsetid ipc_lock ipc_owner "
 		//        + "kill lease linux_immutable net_admin net_bind_service net_broadcast net_raw setgid setuid sys_chroot sys_ptrace syslog");
 
@@ -619,8 +613,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		if (memLimit != null) {
 			int maxMem = memLimit.intValue();
 			sb.append("lxc.cgroup.memory.limit_in_bytes = ").append(maxMem).append("\n")
-					.append("lxc.cgroup.memory.soft_limit_in_bytes = ").append(maxMem).append("\n")
-					.append("lxc.cgroup.memory.memsw.limit_in_bytes = ").append(getMemorySwap(maxMem, true)).append("\n");
+				.append("lxc.cgroup.memory.soft_limit_in_bytes = ").append(maxMem).append("\n")
+				.append("lxc.cgroup.memory.memsw.limit_in_bytes = ").append(getMemorySwap(maxMem, true)).append("\n");
 		}
 		final Long cpuShares = getOptionOrAttributeLong(OPT_CPU_SHARES, ATTR_CPU_SHARES);
 		if (cpuShares != null)
