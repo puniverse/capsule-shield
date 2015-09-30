@@ -12,7 +12,7 @@ In addition to [Capsule's](https://github.com/puniverse/capsule):
 
 ## Usage
 
-The Gradle-style dependency you need to embed in your Capsule JAR, which you can generate with the tool you prefer (f.e. with plain Maven/Gradle as in [Photon](https://github.com/puniverse/photon) and [`capsule-gui-demo`](https://github.com/puniverse/capsule-gui-demo) or higher-level [Capsule build plugins](https://github.com/puniverse/capsule#build-tool-plugins)), is `co.paralleluniverse:capsule-shield:0.1.0`. Also include the caplet class in your Capsule manifest, for example:
+The Gradle-style dependency you need to embed in your Capsule JAR, which you can generate with the tool you prefer (f.e. with plain Maven/Gradle as in [Photon](https://github.com/puniverse/photon) and [`capsule-gui-demo`](https://github.com/puniverse/capsule-gui-demo) or higher-level [Capsule build plugins](https://github.com/puniverse/capsule#build-tool-plugins)), is `co.paralleluniverse:capsule-shield:0.2.0-SNAPSHOT`. Also include the caplet class in your Capsule manifest, for example:
 
 ``` gradle
     Caplets: MavenCapsule ShieldedCapsule
@@ -21,7 +21,7 @@ The Gradle-style dependency you need to embed in your Capsule JAR, which you can
 `capsule-shield` can also be run as a wrapper capsule without embedding it:
 
 ``` bash
-$ java -Dcapsule.log=verbose -jar capsule-shield-0.1.0.jar my-capsule.jar my-capsule-arg1 ...
+$ java -Dcapsule.log=verbose -jar capsule-shield-0.2.0-SNAPSHOT.jar my-capsule.jar my-capsule-arg1 ...
 ```
 
 It can be both run against (or embedded in) plain (e.g. "fat") capsules and [Maven-based](https://github.com/puniverse/capsule-maven) ones.
