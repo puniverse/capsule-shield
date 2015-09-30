@@ -74,8 +74,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String CONTAINER_NAME = "lxc";
 
 	private static final String SEP = File.separator;
-	private static final String HOST_APPCACHE_RELATIVE_CONTAINER_DIR_PARENT = "capsule-shield";
-	private static final String HOST_APPCACHE_RELATIVE_CONTAINER_DIR = HOST_APPCACHE_RELATIVE_CONTAINER_DIR_PARENT + SEP + CONTAINER_NAME;
+	private static final String HOST_RELATIVE_CONTAINER_DIR_PARENT = "capsule-shield";
 	private static final Path CONTAINER_ABSOLUTE_JAVA_HOME = Paths.get(SEP + "java");
 	private static final Path CONTAINER_ABSOLUTE_JAR_HOME = Paths.get(SEP + "capsule" + SEP + "jar");
 	private static final Path CONTAINER_ABSOLUTE_WRAPPER_HOME = Paths.get(SEP + "capsule" + SEP + "wrapper");
@@ -136,6 +135,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	private Path origJavaHome;
 	private Path localRepo;
+	private static Path shieldContainersAppDir;
 
 	private Inet4Address vnetHostIPv4;
 	private Inet4Address vnetContainerIPv4;
@@ -170,20 +170,19 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 		final ProcessBuilder pb = super.prelaunch(jvmArgs, args);
 		setupAgentAndJMXProps(pb.command());
-		pb.command().addAll(0,
-				Arrays.asList("lxc-execute",
-						"--logfile=lxc.log",
-						"--logpriority=" + lxcLogLevel(getLogLevel()),
-						"-P", getContainerParentDir().toString(),
-						"-n", CONTAINER_NAME,
-						"--",
-						"/networked"));
+		try {
+			pb.command().addAll(0,
+					Arrays.asList("lxc-execute",
+							"--logfile=lxc.log",
+							"--logpriority=" + lxcLogLevel(getLogLevel()),
+							"-P", getContainerParentDir().toString(),
+							"-n", CONTAINER_NAME,
+							"--",
+							"/networked"));
+		} catch (final IOException e) {
+			throw new RuntimeException(e);
+		}
 		return pb;
-	}
-
-	@SuppressWarnings("deprecation")
-	public Path getWouldBeAppDir() {
-		return getCacheDir().resolve("apps").resolve(getAppId());
 	}
 
 	//<editor-fold defaultstate="collapsed" desc="JMX">
@@ -313,7 +312,6 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			exec("lxc-destroy", "-n", CONTAINER_NAME, "-P", getContainerParentDir().toString());
 		}
 
-		getWritableAppCache(); // Re-creates app cache dir if needed
 
 		log(LOG_VERBOSE, "Writing LXC configuration");
 		writeConfFile();
@@ -546,7 +544,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		sb.append("lxc.mount.entry = ").append(getJarFile().getParent()).append(" ").append(CONTAINER_ABSOLUTE_JAR_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
 		if (isWrapperCapsule())
 			sb.append("lxc.mount.entry = ").append(findOwnJarFile().getParent()).append(" ").append(CONTAINER_ABSOLUTE_WRAPPER_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
-		sb.append("lxc.mount.entry = ").append(getWouldBeAppDir().toString()).append(" ").append(CONTAINER_ABSOLUTE_CAPSULE_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
+		sb.append("lxc.mount.entry = ").append(getWritableAppCache().toString()).append(" ").append(CONTAINER_ABSOLUTE_CAPSULE_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
 		if (localRepo != null)
 			sb.append("lxc.mount.entry = ").append(localRepo).append(" ").append(CONTAINER_ABSOLUTE_DEP_HOME.toString().substring(1)).append(" none ro,bind 0 0\n");
 
@@ -819,25 +817,38 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	@SuppressWarnings("deprecation")
-	private Path getContainerDir() {
+	private Path getUserHome() {
+		return getCacheDir().getParent();
+	}
+
+	private Path getShieldContainersAppDir() throws IOException {
+		if (shieldContainersAppDir == null) {
+			shieldContainersAppDir = getUserHome().resolve("." + HOST_RELATIVE_CONTAINER_DIR_PARENT).resolve(getAppId());
+			Files.createDirectories(shieldContainersAppDir);
+		}
+		return shieldContainersAppDir;
+	}
+
+	@SuppressWarnings("deprecation")
+	private Path getContainerDir() throws IOException {
 		if (hostAbsoluteContainerDir == null)
-			hostAbsoluteContainerDir = getCacheDir().resolve("apps").resolve(getAppId()).resolve(HOST_APPCACHE_RELATIVE_CONTAINER_DIR).toAbsolutePath().normalize();
+			hostAbsoluteContainerDir = getShieldContainersAppDir().resolve(CONTAINER_NAME).toAbsolutePath().normalize();
 		return hostAbsoluteContainerDir;
 	}
 
-	private Path getContainerParentDir() {
+	private Path getContainerParentDir() throws IOException {
 		return getContainerDir().getParent();
 	}
 
-	private Path getRootFSDir() {
+	private Path getRootFSDir() throws IOException {
 		return getContainerDir().resolve("rootfs");
 	}
 
-	private Path getConfPath() {
+	private Path getConfPath() throws IOException {
 		return getContainerDir().resolve("config");
 	}
 
-	private Path getNetworkedPath() {
+	private Path getNetworkedPath() throws IOException {
 		return getRootFSDir().resolve("networked");
 	}
 
