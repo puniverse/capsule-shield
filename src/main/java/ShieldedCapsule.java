@@ -21,8 +21,9 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.server.RMIServerSocketFactory;
@@ -330,40 +331,42 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	private void createRootFSLayout() throws IOException {
 		final Path ret = getRootFSDir();
+		Files.createDirectories(ret, pp("rwxrwxr-x"));
 
-		Files.createDirectories(ret.resolve("bin"));
+		Files.createDirectories(ret.resolve("bin"), pp("rwxrwx---"));
 
 		final Path capsule = ret.resolve("capsule");
-		Files.createDirectories(capsule.resolve("app"));
-		Files.createDirectory(capsule.resolve("deps"));
-		Files.createDirectory(capsule.resolve("jar"));
-		Files.createDirectory(capsule.resolve("wrapper"));
+		Files.createDirectories(capsule.resolve("app"), pp("rwxrwx---"));
+		Files.createDirectory(capsule.resolve("deps"), pp("rwxrwx---"));
+		Files.createDirectory(capsule.resolve("jar"), pp("rwxrwx---"));
+		Files.createDirectory(capsule.resolve("wrapper"), pp("rwxrwx---"));
 
 		final Path run = ret.resolve("run");
-		Files.createDirectories(run.resolve("network"));
-		Files.createDirectories(run.resolve("resolveconf").resolve("interface"));
-		Files.createDirectory(run.resolve("lock"));
+		Files.createDirectories(run.resolve("network"), pp("rwxrwx---"));
+		Files.createDirectories(run.resolve("resolveconf").resolve("interface"), pp("rwxrwx---"));
+		Files.createDirectory(run.resolve("lock"), pp("rwxrwx---"));
 		exec("chmod", "+t", run.resolve("lock").toAbsolutePath().normalize().toString());
-		Files.createDirectory(run.resolve("shm"));
+		Files.createDirectory(run.resolve("shm"), pp("rwxrwx---"));
 		exec("chmod", "+t", run.resolve("shm").toAbsolutePath().normalize().toString());
 
 		final Path dev = ret.resolve("dev");
-		Files.createDirectories(dev.resolve("mqueue"));
-		Files.createDirectory(dev.resolve("pts"));
+		Files.createDirectories(dev.resolve("mqueue"), pp("rwxrwx---"));
+		Files.createDirectory(dev.resolve("pts"), pp("rwxrwx---"));
 		Files.createSymbolicLink(dev.resolve("shm"), dev.relativize(run.resolve("shm")));
 
 		final Path var = ret.resolve("var");
-		Files.createDirectory(var);
+		Files.createDirectory(var, pp("rwxrwx---"));
 		Files.createSymbolicLink(var.resolve("run"), var.relativize(run));
 
 		final Path etc = ret.resolve("etc");
-		Files.createDirectory(etc);
-		Files.createFile(etc.resolve("fstab"));
-		Files.createDirectory(etc.resolve("dhcp"));
+		Files.createDirectory(etc, pp("rwxrwx---"));
+		Files.createFile(etc.resolve("fstab"), pp("rw-rw----"));
+		Files.createDirectory(etc.resolve("dhcp"), pp("rwxrwx---"));
 		final Path dhclientconf = etc.resolve("dhcp").resolve("dhclient.conf");
+		Files.createFile(dhclientconf, pp("rw-rw----"));
 
 		// This seems to be enough for DHCP networking to work
-		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(dhclientconf, StandardOpenOption.CREATE))) {
+		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(dhclientconf))) {
 			out.println("option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;");
 			out.println("send host-name = gethostname();");
 			out.println("request subnet-mask, broadcast-address, time-offset, routers,\n" +
@@ -373,23 +376,27 @@ public class ShieldedCapsule extends Capsule implements NameService {
 				"        rfc3442-classless-static-routes, ntp-servers,\n" +
 				"        dhcp6.fqdn, dhcp6.sntp-servers;");
 		}
+		exec("chmod", "o-rwx", dhclientconf.toAbsolutePath().normalize().toString());
 
-		Files.createDirectory(ret.resolve("java"));
-		Files.createDirectory(ret.resolve("lib"));
-		Files.createDirectory(ret.resolve("lib64"));
-		Files.createDirectory(ret.resolve("proc"));
-		Files.createDirectory(ret.resolve("sbin"));
-		Files.createDirectory(ret.resolve("sys"));
-		Files.createDirectory(ret.resolve("usr"));
+		Files.createDirectory(ret.resolve("java"), pp("rwxrwx---"));
+		Files.createDirectory(ret.resolve("lib"), pp("rwxrwx---"));
+		Files.createDirectory(ret.resolve("lib64"), pp("rwxrwx---"));
+		Files.createDirectory(ret.resolve("proc"), pp("rwxrwx---"));
+		Files.createDirectory(ret.resolve("sbin"), pp("rwxrwx---"));
+		Files.createDirectory(ret.resolve("sys"), pp("rwxrwx---"));
+		Files.createDirectory(ret.resolve("usr"), pp("rwxrwx---"));
 
 		final Path tmp = ret.resolve("tmp");
-		Files.createDirectory(tmp);
+		Files.createDirectory(tmp, pp("rwxrwx---"));
 		exec("chmod", "+t", tmp.toAbsolutePath().normalize().toString());
 		exec("chmod", "a+rwx", tmp.toAbsolutePath().normalize().toString());
 
 		final Path networked = getNetworkedPath();
-		Files.createFile(networked, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxrwxr-x")));
-		dump(getNetworked(), networked);
+		dump(getNetworked(), networked, "rwxrwxr--");
+	}
+
+	private static FileAttribute<Set<PosixFilePermission>> pp(String p) {
+		return PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString(p));
 	}
 
 	private String getNetworked() {
@@ -459,8 +466,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	private void writeConfFile() throws IOException {
-		Files.createDirectories(getContainerDir());
-		dump(getConf(), getConfPath());
+		Files.createDirectories(getContainerDir(), pp("rwxrwxr-x"));
+		dump(getConf(), getConfPath(), "rw-rw----");
 	}
 
 	private String getConf() {
@@ -834,7 +841,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		return getRootFSDir().resolve("networked");
 	}
 
-	private static void dump(String content, Path loc) throws IOException {
+	private static void dump(String content, Path loc, String posixMode) throws IOException {
+		if (!Files.exists(loc))
+			Files.createFile(loc, pp(posixMode));
 		try (final PrintWriter out = new PrintWriter(new OutputStreamWriter(Files.newOutputStream(loc), Charset.defaultCharset()))) {
 			out.print(content);
 		}
