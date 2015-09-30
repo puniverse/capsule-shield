@@ -418,7 +418,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		return PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString(p));
 	}
 
-	private String getNetworked() {
+	private String getNetworked() throws SocketException {
 		final String staticIP = getOptionOrAttributeString(OPT_STATIC_IP, ATTR_STATIC_IP);
 		return (
 			"#!/bin/bash\n" +
@@ -434,6 +434,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			"# Execute a command with networking enabled.\n" +
 			"#\n" +
 			"# @author circlespainter\n" +
+
+			"\n# Host Bridge IP is: " + getVNetHostIPv4().getHostAddress() + "\n" +
 
 			// Env
 			"\n# Env\n" +
