@@ -87,6 +87,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String OPT_GID_MAP_START = OPTION("capsule.shield.lxc.unprivileged.gidMapStart", "100000", null, false, "The first group ID in an unprivileged container");
 	private static final String OPT_UID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.uidMapSize", "65536", null, false, "The size of the consecutive user ID map in an unprivileged container");
 	private static final String OPT_GID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.gidMapSize", "65536", null, false, "The size of the consecutive group ID map in an unprivileged container");
+	private static final String OPT_LXC_DESTROY_ONLY = OPTION("capsule.shield.lxc.destroyOnly", "false", null, false, "Whether the container should be only destroyed without booting it afterwards");
 	private static final String OPT_LXC_PRIVILEGED = OPTION("capsule.shield.lxc.privileged", "false", null, false, "Whether the container should be privileged");
 	private static final String OPT_LXC_SYSSHAREDIR = OPTION("capsule.shield.lxc.sysShareDir", "/usr/share/lxc", null, false, "The location of the LXC toolchain's system-wide `share` directory");
 	private static final String OPT_JMX = OPTION("capsule.shield.jmx", "true", null, false, "Whether JMX will be proxied from the capsule parent process to the container");
@@ -162,6 +163,15 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		this.localRepo = getLocalRepo();
 
 		try {
+			if (emptyOrTrue(getProperty(OPT_LXC_DESTROY_ONLY))) {
+				destroyContainer();
+				if (Files.exists(getShieldContainersAppDir()) && Files.list(getShieldContainersAppDir()).count() == 0)
+					Files.delete(getShieldContainersAppDir());
+				if (Files.exists(getShieldContainersAppDir().getParent()) && Files.list(getShieldContainersAppDir().getParent()).count() == 0)
+					Files.delete(getShieldContainersAppDir().getParent());
+				return null;
+			}
+
 			if (isBuildNeeded())
 				createContainer();
 		} catch (IOException | InterruptedException e) {
@@ -307,11 +317,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	private void createContainer() throws IOException, InterruptedException {
-		if (isThereSuchContainerAlready()) { // Destroy container
-			log(LOG_VERBOSE, "Destroying existing LXC container");
-			exec("lxc-destroy", "-n", CONTAINER_NAME, "-P", getContainerParentDir().toString());
-		}
-
+		destroyContainer();
 
 		log(LOG_VERBOSE, "Writing LXC configuration");
 		writeConfFile();
@@ -320,6 +326,16 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		log(LOG_VERBOSE, "Creating rootfs");
 		createRootFS();
 		log(LOG_VERBOSE, "Rootfs created at: " + getRootFSDir());
+	}
+
+	private void destroyContainer() {
+		log(LOG_VERBOSE, "Forcibly destroying existing LXC container");
+		try {
+			exec("lxc-destroy", "-n", CONTAINER_NAME, "-P", getShieldContainersAppDir().toString());
+		} catch (final Throwable e) {
+			log(LOG_QUIET, "Warning: couldn't destroy pre-existing container, " + e.getMessage());
+			log(LOG_DEBUG, e);
+		}
 	}
 
 	private void createRootFS() throws IOException, InterruptedException {
@@ -632,10 +648,6 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		sb.append("lxc.rootfs = ").append(getRootFSDir()).append("\n");
 
 		return sb.toString();
-	}
-
-	private boolean isThereSuchContainerAlready() throws IOException, InterruptedException {
-		return new ProcessBuilder("lxc-info", "-n", CONTAINER_NAME, "-P", getContainerParentDir().toString()).start().waitFor() == 0;
 	}
 
 	//<editor-fold defaultstate="collapsed" desc="Both capsule- and container-related overrides & utils">

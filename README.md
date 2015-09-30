@@ -26,10 +26,15 @@ $ java -Dcapsule.log=verbose -jar capsule-shield-0.1.0.jar my-capsule.jar my-cap
 
 It can be both run against (or embedded in) plain (e.g. "fat") capsules and [Maven-based](https://github.com/puniverse/capsule-maven) ones.
 
+## Notes
+
+Please note that an unprivileged container's root disk is owned by a _subuid_ of the user launching the capsule and **cannot be destroyed without user mapping**; should you want or need you can destroy the container by launching the capsule with the `capsule.shield.lxc.destroyOnly` option set. The removal can also be performed manually with `lxc-destroy -n lxc -P ${HOME}/.capsule-shield/<app-id>` (or `lxc-destroy -n lxc -P ${CAPSULE_CACHE_DIR}/../.capsule-shield/<app-id>` if Capsule's cache directory had been re-defined through the `CAPSULE_CACHE_DIR` environment variable in the run that created the container).
+
 ## Additional Capsule manifest entries
 
 The following additional manifest entries and capsule options can be used to customize the container environment:
 
+  * `capsule.shield.lxc.destroyOnly` capsule option: if present or `true`, the container will be forcibly destroyed without re-creating and booting it afterwards.
   * `capsule.shield.lxc.privileged` capsule option: whether the container will be a privileged one or not; unprivileged containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/) and are safer (default: `false`).
   * `capsule.shield.jmx` capsule option: whether JMX will be proxied from the capsule parent process to the container (default: `true`).
 
@@ -51,9 +56,7 @@ The following additional manifest entries and capsule options can be used to cus
     * `capsule.shield.lxc.unprivileged.gidMapSize` capsule option: the size of the consecutive group ID map in an unprivileged container (default: `65536`)
     * `Allowed-Devices`: a list of additional allowed devices in an unprivileged container (example: `"c 136:* rwm" ""`, default: _none_). The `capsule.shield.allowedDevices` capsule option can override it.
 
-The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule/apps/<app-id>/capsule-shield/lxc` (or `${CAPSULE_APP_CACHE}/apps/<app-id>/capsule-shield/lxc` if Capsule's cache directory has been re-defined through the `CAPSULE_CACHE_DIR` environment variable) and re-created automatically when needed.
-
-Please note that the container's root disk is owned by a different user and **cannot be destroyed without user mapping**; should you want or need you can destroy it manually with `lxc-destroy -n lxc -P ${HOME}/.capsule/apps/<app-id>/capsule-shield` (or `lxc-destroy -n lxc -P ${CAPSULE_CACHE_DIR}/apps/<app-id>/capsule-shield` if Capsule's cache directory has been re-defined through the `CAPSULE_CACHE_DIR` environment variable).
+The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule-shield/<app-id>/lxc` (or `${CAPSULE_APP_CACHE}/../capsule-shield/<app-id>/lxc` if Capsule's cache directory has been re-defined through the `CAPSULE_CACHE_DIR` environment variable) and re-created automatically when needed.
 
 ## License
 
