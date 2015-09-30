@@ -68,7 +68,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String PROP_OS_NAME = "os.name";
 	// private static final String PROP_DOMAIN = "sun.net.spi.nameservice.domain";
 	// private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
-	private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
+	// private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
 
 	private static final String CONTAINER_NET_IFACE_NAME = "eth0";
 	private static final String CONTAINER_NAME = "lxc";
@@ -152,14 +152,6 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
-	protected <T> T attribute(Map.Entry<String, T> attr) {
-		if (ATTR_AGENT == attr && emptyOrTrue(getProperty(OPT_JMX)))
-			return (T) Boolean.TRUE;
-		return super.attribute(attr);
-	}
-
-	@Override
 	protected final ProcessBuilder prelaunch(List<String> jvmArgs, List<String> args) {
 		localRepo = getLocalRepo();
 
@@ -196,8 +188,86 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		return pb;
 	}
 
-	//<editor-fold defaultstate="collapsed" desc="JMX">
-	/////////// JMX ///////////////////////////////////
+	//<editor-fold defaultstate="collapsed" desc="LXC Container Networking setup">
+	@Override
+	protected final void liftoff() {
+		if (getOptionOrAttributeBool(OPT_SET_DEFAULT_GW, ATTR_SET_DEFAULT_GW)) {
+			try {
+				log(LOG_VERBOSE, "Setting the default gateway for the container to " + getVNetHostIPv4().getHostAddress());
+				exec("lxc-attach", "-P", getContainerParentDir().toString(), "-n", "lxc", "--", "/sbin/route", "add", "default", "gw", getVNetHostIPv4().getHostAddress());
+			} catch (final IOException e) {
+				log(LOG_QUIET, "Couldn't enable internet: " + e.getMessage());
+				log(LOG_QUIET, e);
+			}
+		}
+	}
+	//</editor-fold>
+
+	//<editor-fold defaultstate="collapsed" desc="LXC Container (Re-)Creation/Deletion">
+	private boolean isBuildNeeded() throws IOException {
+		// Check if the conf files exist
+		if (!Files.exists(getConfPath()) || !Files.exists(getNetworkedPath()))
+			return true;
+
+		// Check if the conf content has changed
+		if (!new String(Files.readAllBytes(getConfPath()), Charset.defaultCharset()).equals(getConf())) {
+			log(LOG_VERBOSE, "Conf file " + getConfPath() + " content has changed");
+			return true;
+		}
+		if (!new String(Files.readAllBytes(getNetworkedPath()), Charset.defaultCharset()).equals(getNetworked())) {
+			log(LOG_VERBOSE, "'networked' script " + getNetworkedPath() + " content has changed");
+			return true;
+		}
+
+		// Check if the application is newer
+		try {
+			FileTime jarTime = Files.getLastModifiedTime(getJarFile());
+			if (isWrapperCapsule()) {
+				FileTime wrapperTime = Files.getLastModifiedTime(findOwnJarFile());
+				if (wrapperTime.compareTo(jarTime) > 0)
+					jarTime = wrapperTime;
+			}
+
+			final FileTime confTime = Files.getLastModifiedTime(getConfPath());
+			final FileTime networkedTime = Files.getLastModifiedTime(getNetworkedPath());
+			return confTime.compareTo(jarTime) < 0 || networkedTime.compareTo(jarTime) < 0;
+		} catch (final IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private void createContainer() throws IOException, InterruptedException {
+		destroyContainer();
+
+		log(LOG_VERBOSE, "Writing LXC configuration");
+		writeConfFile();
+		log(LOG_VERBOSE, "Written conf file: " + getConfPath());
+
+		log(LOG_VERBOSE, "Creating rootfs");
+		createRootFS();
+		log(LOG_VERBOSE, "Rootfs created at: " + getRootFSDir());
+	}
+
+	private void destroyContainer() {
+		log(LOG_VERBOSE, "Forcibly destroying existing LXC container");
+		try {
+			exec("lxc-destroy", "-n", CONTAINER_NAME, "-P", getShieldContainersAppDir().toString());
+		} catch (final Throwable e) {
+			log(LOG_QUIET, "Warning: couldn't destroy pre-existing container, " + e.getMessage());
+			log(LOG_DEBUG, e);
+		}
+	}
+	//</editor-fold>
+
+	//<editor-fold defaultstate="collapsed" desc="LXC Container Caosule Agent-based Monitoring">
+	@Override
+	@SuppressWarnings("unchecked")
+	protected <T> T attribute(Map.Entry<String, T> attr) {
+		if (ATTR_AGENT == attr && emptyOrTrue(getProperty(OPT_JMX)))
+			return (T) Boolean.TRUE;
+		return super.attribute(attr);
+	}
+
 	private static class RMIServerSocketFactoryImpl extends SslRMIServerSocketFactory {
 		private final InetAddress localAddress;
 
@@ -210,19 +280,6 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		@SuppressWarnings("NullableProblems")
 		public ServerSocket createServerSocket(int pPort) throws IOException  {
 			return ServerSocketFactory.getDefault().createServerSocket(pPort, 0, localAddress);
-		}
-	}
-
-	@Override
-	protected final void liftoff() {
-		if (getOptionOrAttributeBool(OPT_SET_DEFAULT_GW, ATTR_SET_DEFAULT_GW)) {
-			try {
-				log(LOG_VERBOSE, "Setting the default gateway for the container to " + getVNetHostIPv4().getHostAddress());
-				exec("lxc-attach", "-P", getContainerParentDir().toString(), "-n", "lxc", "--", "/sbin/route", "add", "default", "gw", getVNetHostIPv4().getHostAddress());
-			} catch (final IOException e) {
-				log(LOG_QUIET, "Couldn't enable internet: " + e.getMessage());
-				log(LOG_QUIET, e);
-			}
 		}
 	}
 
@@ -284,61 +341,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 		return false;
 	}
+	//</editor-fold>
 
-	private boolean isBuildNeeded() throws IOException {
-		// Check if the conf files exist
-		if (!Files.exists(getConfPath()) || !Files.exists(getNetworkedPath()))
-			return true;
-
-		// Check if the conf content has changed
-		if (!new String(Files.readAllBytes(getConfPath()), Charset.defaultCharset()).equals(getConf())) {
-			log(LOG_VERBOSE, "Conf file " + getConfPath() + " content has changed");
-			return true;
-		}
-		if (!new String(Files.readAllBytes(getNetworkedPath()), Charset.defaultCharset()).equals(getNetworked())) {
-			log(LOG_VERBOSE, "'networked' script " + getNetworkedPath() + " content has changed");
-			return true;
-		}
-
-		// Check if the application is newer
-		try {
-			FileTime jarTime = Files.getLastModifiedTime(getJarFile());
-			if (isWrapperCapsule()) {
-				FileTime wrapperTime = Files.getLastModifiedTime(findOwnJarFile());
-				if (wrapperTime.compareTo(jarTime) > 0)
-					jarTime = wrapperTime;
-			}
-
-			final FileTime confTime = Files.getLastModifiedTime(getConfPath());
-			final FileTime networkedTime = Files.getLastModifiedTime(getNetworkedPath());
-			return confTime.compareTo(jarTime) < 0 || networkedTime.compareTo(jarTime) < 0;
-		} catch (final IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	private void createContainer() throws IOException, InterruptedException {
-		destroyContainer();
-
-		log(LOG_VERBOSE, "Writing LXC configuration");
-		writeConfFile();
-		log(LOG_VERBOSE, "Written conf file: " + getConfPath());
-
-		log(LOG_VERBOSE, "Creating rootfs");
-		createRootFS();
-		log(LOG_VERBOSE, "Rootfs created at: " + getRootFSDir());
-	}
-
-	private void destroyContainer() {
-		log(LOG_VERBOSE, "Forcibly destroying existing LXC container");
-		try {
-			exec("lxc-destroy", "-n", CONTAINER_NAME, "-P", getShieldContainersAppDir().toString());
-		} catch (final Throwable e) {
-			log(LOG_QUIET, "Warning: couldn't destroy pre-existing container, " + e.getMessage());
-			log(LOG_DEBUG, e);
-		}
-	}
-
+	//<editor-fold defaultstate="collapsed" desc="LXC Container Root FS">
 	private void createRootFS() throws IOException, InterruptedException {
 		createRootFSLayout();
 		chownRootFS();
@@ -412,10 +417,6 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 		final Path networked = getNetworkedPath();
 		dump(getNetworked(), networked, "rwxrwxr--");
-	}
-
-	private static FileAttribute<Set<PosixFilePermission>> pp(String p) {
-		return PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString(p));
 	}
 
 	private String getNetworked() throws SocketException {
@@ -504,7 +505,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 		exec("lxc-usernsexec", "-m", meAsNSRootUIDMap, "-m", meAsNSRootGIDMap, "-m", nsRootAs1UIDMap, "-m", nsRootAs1GIDMap, "--", "chown", "-R", "1:1", getRootFSDir().toString());
 	}
+	//</editor-fold>
 
+	//<editor-fold defaultstate="collapsed" desc="LXC Container Conf">
 	private void writeConfFile() throws IOException {
 		Files.createDirectories(getContainerDir(), pp("rwxrwxr-x"));
 		dump(getConf(), getConfPath(), "rw-rw----");
@@ -674,8 +677,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 		return sb.toString();
 	}
+	//</editor-fold>
 
-	//<editor-fold defaultstate="collapsed" desc="Both capsule- and container-related overrides & utils">
+	//<editor-fold defaultstate="collapsed" desc="LXC Container Java Home">
 	/**
 	 * Resolve relative to the container
 	 */
@@ -687,7 +691,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		origJavaHome = res.getValue();
 		return entry(res.getKey(), CONTAINER_ABSOLUTE_JAVA_HOME);
 	}
+	//</editor-fold>
 
+	//<editor-fold defaultstate="collapsed" desc="LXC Container Artifact Resolution">
 	/**
 	 * Resolve relative to the container
 	 */
@@ -732,7 +738,224 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private Path moveWrapperFile(Path p) {
 		return CONTAINER_ABSOLUTE_WRAPPER_HOME.resolve(p.getFileName());
 	}
+	//</editor-fold>
 
+	//<editor-fold defaultstate="collapsed" desc="LXC Container Paths">
+	private Path getShieldContainersAppDir() throws IOException {
+		if (shieldContainersAppDir == null) {
+			shieldContainersAppDir = getUserHome().resolve("." + HOST_RELATIVE_CONTAINER_DIR_PARENT).resolve(getAppId());
+			Files.createDirectories(shieldContainersAppDir);
+		}
+		return shieldContainersAppDir;
+	}
+
+	@SuppressWarnings("deprecation")
+	private Path getContainerDir() throws IOException {
+		if (hostAbsoluteContainerDir == null)
+			hostAbsoluteContainerDir = getShieldContainersAppDir().resolve(CONTAINER_NAME).toAbsolutePath().normalize();
+		return hostAbsoluteContainerDir;
+	}
+
+	private Path getContainerParentDir() throws IOException {
+		return getContainerDir().getParent();
+	}
+
+	private Path getRootFSDir() throws IOException {
+		return getContainerDir().resolve("rootfs");
+	}
+
+	private Path getConfPath() throws IOException {
+		return getContainerDir().resolve("config");
+	}
+
+	private Path getNetworkedPath() throws IOException {
+		return getRootFSDir().resolve("networked");
+	}
+	//</editor-fold>
+
+	//<editor-fold defaultstate="collapsed" desc="LXC Container NameService">
+	/////////// NameService ///////////////////////////////////
+	protected void agent(Instrumentation inst) {
+		// setLinkNameService(); // must be done before call to super
+
+		super.agent(inst);
+	}
+
+	/*
+	private static void setLinkNameService() {
+		String newv = "dns,shield";
+		for (int i = 1; ; i++) {
+			final String prop = PROP_PREFIX_NAMESERVICE + i;
+			final String oldv = System.getProperty(prop);
+			System.setProperty(prop, newv);
+			if (oldv == null || oldv.isEmpty())
+				break;
+			newv = oldv;
+		}
+	}
+	*/
+
+	/**
+	 * Look up all hosts by name.
+	 *
+	 * @param hostName the host name
+	 * @return an array of addresses for the host name
+	 * @throws UnknownHostException if there are no names for this host, or if resolution fails
+	 */
+	public InetAddress[] lookupAllHostAddr(final String hostName) throws UnknownHostException {
+		// TODO: Linking
+		throw new UnknownHostException("Failed to resolve address");
+	}
+
+	/**
+	 * Get the name of the host with the given IP address.
+	 *
+	 * @param bytes the address bytes
+	 * @return the host name
+	 * @throws UnknownHostException if there is no host name for this IP address
+	 */
+	public String getHostByAddr(final byte[] bytes) throws UnknownHostException {
+		// TODO: Linking
+		throw new UnknownHostException("Failed to resolve address");
+	}
+	//</editor-fold>
+
+	//<editor-fold defaultstate="collapsed" desc="LXC Utils">
+	private static String lxcLogLevel(int loglevel) {
+		loglevel = Math.min(loglevel, LOG_DEBUG);
+		switch (loglevel) {
+			case LOG_NONE:
+				return "ERROR";
+			case LOG_QUIET:
+				return "NOTICE";
+			case LOG_VERBOSE:
+				return "INFO";
+			case LOG_DEBUG:
+				return "DEBUG";
+			default:
+				throw new IllegalArgumentException("Unrecognized log level: " + loglevel);
+		}
+	}
+
+	private static boolean isLXCInstalled() {
+		if (isLXCInstalled == null) {
+			try {
+				exec("lxc-checkconfig");
+				return (isLXCInstalled = true);
+			} catch (final IOException e) {
+				throw new RuntimeException(e);
+			} catch (final RuntimeException e) {
+				return (isLXCInstalled = false);
+			}
+		}
+		return isLXCInstalled;
+	}
+	//</editor-fold>
+
+	// TODO Factor with Capsule
+	//<editor-fold defaultstate="collapsed" desc="System Utils">
+	private static long getMemorySwap(long maxMem, boolean swap) {
+		return swap ? maxMem * 2 : 0;
+	}
+	//</editor-fold>
+
+	// TODO Factor with Capsule
+	//<editor-fold defaultstate="collapsed" desc="Linux Utils">
+	private static boolean isLinux() {
+		return System.getProperty(PROP_OS_NAME).toLowerCase().contains("nux");
+	}
+
+	private static String getDistroType() {
+		if (distroType == null) {
+			BufferedReader bri = null;
+			try {
+				final Process p = new ProcessBuilder("/bin/sh", "-c", "cat /etc/*-release").start();
+				bri = new BufferedReader(new InputStreamReader(p.getInputStream()));
+				String line;
+				while ((line = bri.readLine()) != null) {
+					if (line.startsWith("ID="))
+						return (distroType = line.substring(3).trim().toLowerCase());
+				}
+			} catch (final IOException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					if (bri != null)
+						bri.close();
+				} catch (final IOException ignored) {}
+			}
+		}
+		return distroType;
+	}
+	//</editor-fold>
+
+	// TODO Factor with Capsule
+	//<editor-fold defaultstate="collapsed" desc="Posix Utils">
+	private static Long getCurrentUID() throws IOException, InterruptedException {
+		return getPosixSubjectID("-u");
+	}
+
+	private static Long getCurrentGID() throws IOException, InterruptedException {
+		return getPosixSubjectID("-g");
+	}
+
+	private static Long getPosixSubjectID(String type) throws IOException, InterruptedException {
+		final ProcessBuilder pb = new ProcessBuilder("id", type);
+		final Process p = pb.start();
+		if (p.waitFor() != 0)
+			throw new RuntimeException("'id " + type + "' exited with non-zero status");
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream(), Charset.defaultCharset()))) {
+			return Long.parseLong(reader.readLine());
+		}
+	}
+
+	private static FileAttribute<Set<PosixFilePermission>> pp(String p) {
+		return PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString(p));
+	}
+	//</editor-fold>
+
+	// TODO Factor with Capsule
+	//<editor-fold defaultstate="collapsed" desc="Net Utils">
+	private Inet4Address getVNetHostIPv4() throws SocketException {
+		// TODO IPv6
+		if (vnetHostIPv4 == null) {
+			final Enumeration<InetAddress> vas = NetworkInterface.getByName(getAttribute(ATTR_LXC_NETWORK_BRIDGE)).getInetAddresses();
+			while (vas.hasMoreElements()) {
+				final InetAddress ia = vas.nextElement();
+				if (ia instanceof Inet4Address)
+					vnetHostIPv4 = (Inet4Address) ia;
+			}
+		}
+		return vnetHostIPv4;
+	}
+
+	private Inet4Address getVNetContainerIPv4() throws SocketException {
+		// TODO IPv6
+		if (vnetContainerIPv4 == null) {
+			final Enumeration<InetAddress> vas = NetworkInterface.getByName(CONTAINER_NET_IFACE_NAME).getInetAddresses();
+			while (vas.hasMoreElements()) {
+				final InetAddress ia = vas.nextElement();
+				if (ia instanceof Inet4Address)
+					vnetContainerIPv4 = (Inet4Address) ia;
+			}
+		}
+		return vnetContainerIPv4;
+	}
+	//</editor-fold>
+
+	// TODO Factor with Capsule
+	//<editor-fold defaultstate="collapsed" desc="FS Utils">
+	private static void dump(String content, Path loc, String posixMode) throws IOException {
+		if (!Files.exists(loc))
+			Files.createFile(loc, pp(posixMode));
+		try (final PrintWriter out = new PrintWriter(new OutputStreamWriter(Files.newOutputStream(loc), Charset.defaultCharset()))) {
+			out.print(content);
+		}
+	}
+	//</editor-fold>
+
+	// TODO Factor with Capsule
+	//<editor-fold defaultstate="collapsed" desc="Capsule Utils">
 	private Path getLocalRepo() {
 		final Capsule mavenCaplet = sup("MavenCapsule");
 		if (mavenCaplet == null)
@@ -781,54 +1004,11 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 	//</editor-fold>
 
-	//<editor-fold defaultstate="collapsed" desc="Platform utils">
-	private static String lxcLogLevel(int loglevel) {
-		loglevel = Math.min(loglevel, LOG_DEBUG);
-		switch (loglevel) {
-			case LOG_NONE:
-				return "ERROR";
-			case LOG_QUIET:
-				return "NOTICE";
-			case LOG_VERBOSE:
-				return "INFO";
-			case LOG_DEBUG:
-				return "DEBUG";
-			default:
-				throw new IllegalArgumentException("Unrecognized log level: " + loglevel);
-		}
-	}
-
-	private static boolean isLXCInstalled() {
-		if (isLXCInstalled == null) {
-			try {
-				exec("lxc-checkconfig");
-				return (isLXCInstalled = true);
-			} catch (final IOException e) {
-				throw new RuntimeException(e);
-			} catch (final RuntimeException e) {
-				return (isLXCInstalled = false);
-			}
-		}
-		return isLXCInstalled;
-	}
-
-	private static long getMemorySwap(long maxMem, boolean swap) {
-		return swap ? maxMem * 2 : 0;
-	}
-
-	private static boolean isLinux() {
-		return System.getProperty(PROP_OS_NAME).toLowerCase().contains("nux");
-	}
-
-	private static <K, V> Entry<K, V> entry(K k, V v) {
-		return new AbstractMap.SimpleImmutableEntry<>(k, v);
-	}
-
-	private static <T extends AccessibleObject> T accessible(T obj) {
-		if (obj == null)
-			return null;
-		obj.setAccessible(true);
-		return obj;
+	// TODO Factor with Capsule
+	//<editor-fold defaultstate="collapsed" desc="Copied from Capsule">
+	@SuppressWarnings("deprecation")
+	private Path getUserHome() {
+		return getCacheDir().getParent();
 	}
 
 	private static Path findOwnJarFile() {
@@ -853,164 +1033,19 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		return hostAbsoluteOwnJarFile;
 	}
 
-	@SuppressWarnings("deprecation")
-	private Path getUserHome() {
-		return getCacheDir().getParent();
-	}
-
-	private Path getShieldContainersAppDir() throws IOException {
-		if (shieldContainersAppDir == null) {
-			shieldContainersAppDir = getUserHome().resolve("." + HOST_RELATIVE_CONTAINER_DIR_PARENT).resolve(getAppId());
-			Files.createDirectories(shieldContainersAppDir);
-		}
-		return shieldContainersAppDir;
-	}
-
-	@SuppressWarnings("deprecation")
-	private Path getContainerDir() throws IOException {
-		if (hostAbsoluteContainerDir == null)
-			hostAbsoluteContainerDir = getShieldContainersAppDir().resolve(CONTAINER_NAME).toAbsolutePath().normalize();
-		return hostAbsoluteContainerDir;
-	}
-
-	private Path getContainerParentDir() throws IOException {
-		return getContainerDir().getParent();
-	}
-
-	private Path getRootFSDir() throws IOException {
-		return getContainerDir().resolve("rootfs");
-	}
-
-	private Path getConfPath() throws IOException {
-		return getContainerDir().resolve("config");
-	}
-
-	private Path getNetworkedPath() throws IOException {
-		return getRootFSDir().resolve("networked");
-	}
-
-	private static void dump(String content, Path loc, String posixMode) throws IOException {
-		if (!Files.exists(loc))
-			Files.createFile(loc, pp(posixMode));
-		try (final PrintWriter out = new PrintWriter(new OutputStreamWriter(Files.newOutputStream(loc), Charset.defaultCharset()))) {
-			out.print(content);
-		}
-	}
-
-	private static String getDistroType() {
-		if (distroType == null) {
-			BufferedReader bri = null;
-			try {
-				final Process p = new ProcessBuilder("/bin/sh", "-c", "cat /etc/*-release").start();
-				bri = new BufferedReader(new InputStreamReader(p.getInputStream()));
-				String line;
-				while ((line = bri.readLine()) != null) {
-					if (line.startsWith("ID="))
-						return (distroType = line.substring(3).trim().toLowerCase());
-				}
-			} catch (final IOException e) {
-				e.printStackTrace();
-			} finally {
-				try {
-					if (bri != null)
-						bri.close();
-				} catch (final IOException ignored) {}
-			}
-		}
-		return distroType;
-	}
-
-	private static Long getCurrentUID() throws IOException, InterruptedException {
-		return getPosixSubjectID("-u");
-	}
-
-	private static Long getCurrentGID() throws IOException, InterruptedException {
-		return getPosixSubjectID("-g");
-	}
-
-	private static Long getPosixSubjectID(String type) throws IOException, InterruptedException {
-		final ProcessBuilder pb = new ProcessBuilder("id", type);
-		final Process p = pb.start();
-		if (p.waitFor() != 0)
-			throw new RuntimeException("'id " + type + "' exited with non-zero status");
-		try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream(), Charset.defaultCharset()))) {
-			return Long.parseLong(reader.readLine());
-		}
-	}
-
 	private static boolean emptyOrTrue(String value) {
 		return value != null && (value.isEmpty() || Boolean.parseBoolean(value));
 	}
 
-	private Inet4Address getVNetHostIPv4() throws SocketException {
-		// TODO IPv6
-		if (vnetHostIPv4 == null) {
-			final Enumeration<InetAddress> vas = NetworkInterface.getByName(getAttribute(ATTR_LXC_NETWORK_BRIDGE)).getInetAddresses();
-			while (vas.hasMoreElements()) {
-				final InetAddress ia = vas.nextElement();
-				if (ia instanceof Inet4Address)
-					vnetHostIPv4 = (Inet4Address) ia;
-			}
-		}
-		return vnetHostIPv4;
+	private static <K, V> Entry<K, V> entry(K k, V v) {
+		return new AbstractMap.SimpleImmutableEntry<>(k, v);
 	}
 
-	private Inet4Address getVNetContainerIPv4() throws SocketException {
-		// TODO IPv6
-		if (vnetContainerIPv4 == null) {
-			final Enumeration<InetAddress> vas = NetworkInterface.getByName(CONTAINER_NET_IFACE_NAME).getInetAddresses();
-			while (vas.hasMoreElements()) {
-				final InetAddress ia = vas.nextElement();
-				if (ia instanceof Inet4Address)
-					vnetContainerIPv4 = (Inet4Address) ia;
-			}
-		}
-		return vnetContainerIPv4;
-	}
-	//</editor-fold>
-
-	//<editor-fold defaultstate="collapsed" desc="NameService">
-	/////////// NameService ///////////////////////////////////
-	protected void agent(Instrumentation inst) {
-		// setLinkNameService(); // must be done before call to super
-
-		super.agent(inst);
-	}
-
-	private static void setLinkNameService() {
-		String newv = "dns,shield";
-		for (int i = 1; ; i++) {
-			final String prop = PROP_PREFIX_NAMESERVICE + i;
-			final String oldv = System.getProperty(prop);
-			System.setProperty(prop, newv);
-			if (oldv == null || oldv.isEmpty())
-				break;
-			newv = oldv;
-		}
-	}
-
-	/**
-	 * Look up all hosts by name.
-	 *
-	 * @param hostName the host name
-	 * @return an array of addresses for the host name
-	 * @throws UnknownHostException if there are no names for this host, or if resolution fails
-	 */
-	public InetAddress[] lookupAllHostAddr(final String hostName) throws UnknownHostException {
-		// TODO: Linking
-		throw new UnknownHostException("Failed to resolve address");
-	}
-
-	/**
-	 * Get the name of the host with the given IP address.
-	 *
-	 * @param bytes the address bytes
-	 * @return the host name
-	 * @throws UnknownHostException if there is no host name for this IP address
-	 */
-	public String getHostByAddr(final byte[] bytes) throws UnknownHostException {
-		// TODO: Linking
-		throw new UnknownHostException("Failed to resolve address");
+	private static <T extends AccessibleObject> T accessible(T obj) {
+		if (obj == null)
+			return null;
+		obj.setAccessible(true);
+		return obj;
 	}
 	//</editor-fold>
 }
