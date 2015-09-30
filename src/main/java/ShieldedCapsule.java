@@ -376,6 +376,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		final Path etc = ret.resolve("etc");
 		Files.createDirectory(etc, pp("rwxrwx---"));
 		Files.createFile(etc.resolve("fstab"), pp("rw-rw----"));
+		Files.createFile(etc.resolve("resolv.conf"), pp("rw-rw----"));
+		try (final PrintWriter out = new PrintWriter(Files.newOutputStream(etc.resolve("resolv.conf")))) {
+			out.println("nameserver " + getVNetHostIPv4().getHostAddress());
+		}
 		Files.createDirectory(etc.resolve("dhcp"), pp("rwxrwx---"));
 		final Path dhclientconf = etc.resolve("dhcp").resolve("dhclient.conf");
 		Files.createFile(dhclientconf, pp("rw-rw----"));
@@ -430,15 +434,31 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			"# Execute a command with networking enabled.\n" +
 			"#\n" +
 			"# @author circlespainter\n" +
-			"\n" +
+
+			// Env
+			"\n# Env\n" +
 			"export JAVA_HOME=/java\n" +
+			"export CAPSULE_CACHE_DIR=/var/cache/capsule\n" +
+
+			// Init loopack
+			"\n# Init loopback\n" +
 			"/sbin/ifconfig lo 127.0.0.1\n" +
 			"/sbin/route add -net 127.0.0.0 netmask 255.0.0.0 lo\n" +
-			(staticIP == null ? "/sbin/dhclient\n" : "") +
-			(staticIP != null ? "/sbin/ifconfig " + CONTAINER_NET_IFACE_NAME + " " + staticIP + "\n" : "") +
+
+			// Networking as configured
+			"\n# Networking as configured\n" +
+			(staticIP == null ?
+				"/sbin/dhclient\n" :
+				"/sbin/ifconfig " + CONTAINER_NET_IFACE_NAME + " " + staticIP + "\n") +
+
+			// Execute the main app with args and get the exit value
+			"\n# Execute the main app with args and get the exit value\n" +
 			"\"$@\"\n" +
 			"RET=$?\n" +
+
 			(staticIP == null ?
+				// Wait for DHCP termination
+				"\n# Wait for DHCP termination\n" +
 				"if [ -f \"/run/dhclient.pid\" ]; then\n" +
 				"    DHCLIENT_PID=`/bin/cat /run/dhclient.pid`;\n" +
 				"    if [ -n $DHCLIENT_PID ]; then\n" +
@@ -447,6 +467,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 				"fi\n" :
 				""
 			) +
+
+			// Exit with the application's exit value
+			"\n# Exit with the application's exit value\n" +
 			"exit $RET\n"
 		);
 	}
