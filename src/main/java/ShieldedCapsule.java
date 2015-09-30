@@ -970,14 +970,11 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//<editor-fold defaultstate="collapsed" desc="NameService">
 	/////////// NameService ///////////////////////////////////
 	protected void agent(Instrumentation inst) {
-		setLinkNameService(); // must be done before call to super
+		// setLinkNameService(); // must be done before call to super
 
 		super.agent(inst);
 	}
-	//</editor-fold>
 
-	//<editor-fold defaultstate="collapsed" desc="NameService">
-	/////////// NameService ///////////////////////////////////
 	private static void setLinkNameService() {
 		String newv = "dns,shield";
 		for (int i = 1; ; i++) {
