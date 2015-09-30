@@ -83,11 +83,12 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//</editor-fold>
 
 	//<editor-fold defaultstate="collapsed" desc="Configuration">
-	private static final String OPT_UID_MAP_START = OPTION("capsule.shield.lxc.unprivileged.uidMapStart", "100000", null, false, "The first user ID in an unprivileged container");
-	private static final String OPT_GID_MAP_START = OPTION("capsule.shield.lxc.unprivileged.gidMapStart", "100000", null, false, "The first group ID in an unprivileged container");
-	private static final String OPT_UID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.uidMapSize", "65536", null, false, "The size of the consecutive user ID map in an unprivileged container");
-	private static final String OPT_GID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.gidMapSize", "65536", null, false, "The size of the consecutive group ID map in an unprivileged container");
 	private static final String OPT_LXC_DESTROY_ONLY = OPTION("capsule.shield.lxc.destroyOnly", "false", null, false, "Whether the container should be only destroyed without booting it afterwards");
+
+	private static final String OPT_LXC_UID_MAP_START = OPTION("capsule.shield.lxc.unprivileged.uidMapStart", "100000", null, false, "The first user ID in an unprivileged container");
+	private static final String OPT_LXC_GID_MAP_START = OPTION("capsule.shield.lxc.unprivileged.gidMapStart", "100000", null, false, "The first group ID in an unprivileged container");
+	private static final String OPT_LXC_UID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.uidMapSize", "65536", null, false, "The size of the consecutive user ID map in an unprivileged container");
+	private static final String OPT_LXC_GID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.gidMapSize", "65536", null, false, "The size of the consecutive group ID map in an unprivileged container");
 	private static final String OPT_LXC_PRIVILEGED = OPTION("capsule.shield.lxc.privileged", "false", null, false, "Whether the container should be privileged");
 	private static final String OPT_LXC_SYSSHAREDIR = OPTION("capsule.shield.lxc.sysShareDir", "/usr/share/lxc", null, false, "The location of the LXC toolchain's system-wide `share` directory");
 	private static final String OPT_JMX = OPTION("capsule.shield.jmx", "true", null, false, "Whether JMX will be proxied from the capsule parent process to the container");
@@ -134,12 +135,12 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static Path hostAbsoluteContainerDir;
 	private static Path hostAbsoluteOwnJarFile;
 
-	private Path origJavaHome;
-	private Path localRepo;
+	private static Path origJavaHome;
+	private static Path localRepo;
 	private static Path shieldContainersAppDir;
 
-	private Inet4Address vnetHostIPv4;
-	private Inet4Address vnetContainerIPv4;
+	private static Inet4Address vnetHostIPv4;
+	private static Inet4Address vnetContainerIPv4;
 
 	public ShieldedCapsule(Capsule pred) {
 		super(pred);
@@ -160,7 +161,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	@Override
 	protected final ProcessBuilder prelaunch(List<String> jvmArgs, List<String> args) {
-		this.localRepo = getLocalRepo();
+		localRepo = getLocalRepo();
 
 		try {
 			if (emptyOrTrue(getProperty(OPT_LXC_DESTROY_ONLY))) {
@@ -174,7 +175,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 			if (isBuildNeeded())
 				createContainer();
-		} catch (IOException | InterruptedException e) {
+		} catch (final IOException | InterruptedException e) {
 			throw new RuntimeException(e);
 		}
 
@@ -218,7 +219,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			try {
 				log(LOG_VERBOSE, "Setting the default gateway for the container to " + getVNetHostIPv4().getHostAddress());
 				exec("lxc-attach", "-P", getContainerParentDir().toString(), "-n", "lxc", "--", "/sbin/route", "add", "default", "gw", getVNetHostIPv4().getHostAddress());
-			} catch (IOException e) {
+			} catch (final IOException e) {
 				log(LOG_QUIET, "Couldn't enable internet: " + e.getMessage());
 				log(LOG_QUIET, e);
 			}
@@ -255,7 +256,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			rmiServer.start();
 
 			return jmxServiceURL;
-		} catch (Exception e) {
+		} catch (final Exception e) {
 			log(LOG_VERBOSE, "JMXConnectorServer failed: " + e.getMessage());
 			log(LOG_VERBOSE, e);
 			return null;
@@ -275,7 +276,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			try {
 				command.add(idx, "-Dcapsule.address=" + getVNetHostIPv4().getHostAddress());
 				return true;
-			} catch (SocketException e) {
+			} catch (final SocketException e) {
 				log(LOG_QUIET, "Couldn't setup the agent communication link: " + e.getMessage());
 				log(LOG_QUIET, e);
 				return false;
@@ -311,7 +312,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			final FileTime confTime = Files.getLastModifiedTime(getConfPath());
 			final FileTime networkedTime = Files.getLastModifiedTime(getNetworkedPath());
 			return confTime.compareTo(jarTime) < 0 || networkedTime.compareTo(jarTime) < 0;
-		} catch (IOException e) {
+		} catch (final IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
@@ -456,15 +457,15 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private void chownRootFS() throws IOException, InterruptedException {
 		final Long uidMapStart;
 		try {
-			uidMapStart = Long.parseLong(getProperty(OPT_UID_MAP_START));
-		} catch (Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_START + " with value " + getProperty(OPT_UID_MAP_START) + " into a Long value", t);
+			uidMapStart = Long.parseLong(getProperty(OPT_LXC_UID_MAP_START));
+		} catch (final Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_LXC_UID_MAP_START + " with value " + getProperty(OPT_LXC_UID_MAP_START) + " into a Long value", t);
 		}
 		final Long gidMapStart;
 		try {
-			gidMapStart = Long.parseLong(getProperty(OPT_GID_MAP_START));
-		} catch (Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_START + "with value " + getProperty(OPT_GID_MAP_START) + " into a Long value", t);
+			gidMapStart = Long.parseLong(getProperty(OPT_LXC_GID_MAP_START));
+		} catch (final Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_LXC_GID_MAP_START + "with value " + getProperty(OPT_LXC_GID_MAP_START) + " into a Long value", t);
 		}
 
 		final Long currentUID = getCurrentUID();
@@ -484,41 +485,40 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		dump(getConf(), getConfPath(), "rw-rw----");
 	}
 
-	private String getConf() {
+	private String getConf() throws IOException {
 		final StringBuilder sb = new StringBuilder();
 		final String lxcConfig = getProperty(OPT_LXC_SYSSHAREDIR) + SEP + "config";
 		boolean privileged = false;
 		try {
 			privileged = Boolean.parseBoolean(getProperty(OPT_LXC_PRIVILEGED));
-		} catch (Throwable ignored) {
-		}
+		} catch (final Throwable ignored) {}
 		final String networkType = getOptionOrAttributeString(OPT_LXC_NETWORKING_TYPE, ATTR_LXC_NETWORKING_TYPE);
 		final String networkBridge = getOptionOrAttributeString(OPT_LXC_NETWORK_BRIDGE, ATTR_LXC_NETWORK_BRIDGE);
 		boolean tty = getOptionOrAttributeBool(OPT_LXC_ALLOW_TTY, ATTR_LXC_ALLOW_TTY);
 		final String hostname = getOptionOrAttributeString(OPT_HOSTNAME, ATTR_HOSTNAME);
 		final Long uidMapStart;
 		try {
-			uidMapStart = Long.parseLong(getProperty(OPT_UID_MAP_START));
-		} catch (Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_START + "with value " + getProperty(OPT_UID_MAP_START) + "  into a Long value", t);
+			uidMapStart = Long.parseLong(getProperty(OPT_LXC_UID_MAP_START));
+		} catch (final Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_LXC_UID_MAP_START + "with value " + getProperty(OPT_LXC_UID_MAP_START) + "  into a Long value", t);
 		}
 		final Long gidMapStart;
 		try {
-			gidMapStart = Long.parseLong(getProperty(OPT_GID_MAP_START));
-		} catch (Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_START + "with value " + getProperty(OPT_GID_MAP_START) + "  into a Long value", t);
+			gidMapStart = Long.parseLong(getProperty(OPT_LXC_GID_MAP_START));
+		} catch (final Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_LXC_GID_MAP_START + "with value " + getProperty(OPT_LXC_GID_MAP_START) + "  into a Long value", t);
 		}
 		final Long sizeUidMap;
 		try {
-			sizeUidMap = Long.parseLong(getProperty(OPT_UID_MAP_SIZE));
-		} catch (Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_SIZE + "with value " + getProperty(OPT_UID_MAP_SIZE) + " into a Long value", t);
+			sizeUidMap = Long.parseLong(getProperty(OPT_LXC_UID_MAP_SIZE));
+		} catch (final Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_LXC_UID_MAP_SIZE + "with value " + getProperty(OPT_LXC_UID_MAP_SIZE) + " into a Long value", t);
 		}
 		final Long sizeGidMap;
 		try {
-			sizeGidMap = Long.parseLong(getProperty(OPT_GID_MAP_SIZE));
-		} catch (Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_SIZE + "with value " + getProperty(OPT_GID_MAP_SIZE) + " into a Long value", t);
+			sizeGidMap = Long.parseLong(getProperty(OPT_LXC_GID_MAP_SIZE));
+		} catch (final Throwable t) {
+			throw new RuntimeException("Cannot parse option " + OPT_LXC_GID_MAP_SIZE + "with value " + getProperty(OPT_LXC_GID_MAP_SIZE) + " into a Long value", t);
 		}
 
 		// System mounts
@@ -659,7 +659,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		Entry<String, Path> res = super.chooseJavaHome();
 		if (res == null)
 			res = entry(getProperty(PROP_JAVA_VERSION), Paths.get(getProperty(PROP_JAVA_HOME)));
-		this.origJavaHome = res.getValue();
+		origJavaHome = res.getValue();
 		return entry(res.getKey(), CONTAINER_ABSOLUTE_JAVA_HOME);
 	}
 
@@ -714,7 +714,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			return null;
 		try {
 			return (Path) accessible(mavenCaplet.getClass().getDeclaredMethod("getLocalRepo")).invoke(mavenCaplet);
-		} catch (ReflectiveOperationException e) {
+		} catch (final ReflectiveOperationException e) {
 			throw new RuntimeException(e);
 		}
 	}
@@ -739,7 +739,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			return getAttribute(attr);
 		try {
 			return Long.parseLong(propValue);
-		} catch (Throwable t) {
+		} catch (final Throwable t) {
 			return getAttribute(attr);
 		}
 	}
@@ -750,7 +750,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			return getAttribute(attr);
 		try {
 			return Boolean.parseBoolean(propValue);
-		} catch (Throwable t) {
+		} catch (final Throwable t) {
 			return getAttribute(attr);
 		}
 	}
@@ -778,9 +778,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			try {
 				exec("lxc-checkconfig");
 				return (isLXCInstalled = true);
-			} catch (IOException e) {
+			} catch (final IOException e) {
 				throw new RuntimeException(e);
-			} catch (RuntimeException e) {
+			} catch (final RuntimeException e) {
 				return (isLXCInstalled = false);
 			}
 		}
@@ -819,7 +819,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 				try {
 					final URI jarUri = new URI(path.substring(0, path.indexOf('!')));
 					hostAbsoluteOwnJarFile = Paths.get(jarUri);
-				} catch (URISyntaxException e) {
+				} catch (final URISyntaxException e) {
 					throw new AssertionError(e);
 				}
 			} else
@@ -883,13 +883,13 @@ public class ShieldedCapsule extends Capsule implements NameService {
 					if (line.startsWith("ID="))
 						return (distroType = line.substring(3).trim().toLowerCase());
 				}
-			} catch (IOException e) {
+			} catch (final IOException e) {
 				e.printStackTrace();
 			} finally {
 				try {
 					if (bri != null)
 						bri.close();
-				} catch (IOException ignored) {}
+				} catch (final IOException ignored) {}
 			}
 		}
 		return distroType;
