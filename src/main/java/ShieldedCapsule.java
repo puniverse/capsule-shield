@@ -1006,9 +1006,32 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	// TODO Factor with Capsule
 	//<editor-fold defaultstate="collapsed" desc="Copied from Capsule">
-	@SuppressWarnings("deprecation")
 	private Path getUserHome() {
-		return getCacheDir().getParent();
+		final Path home;
+
+		final Path userHome = Paths.get(getProperty("user.home"));
+		if (!isWindows())
+			home = userHome;
+		else {
+			Path localData;
+			final String localAppData = getenv("LOCALAPPDATA");
+			if (localAppData != null) {
+				localData = Paths.get(localAppData);
+				if (!Files.isDirectory(localData))
+					throw new RuntimeException("%LOCALAPPDATA% set to nonexistent directory " + localData);
+			} else {
+				localData = userHome.resolve(Paths.get("AppData", "Local"));
+				if (!Files.isDirectory(localData))
+					localData = userHome.resolve(Paths.get("Local Settings", "Application Data"));
+				if (!Files.isDirectory(localData))
+					throw new RuntimeException("%LOCALAPPDATA% is undefined, and neither "
+							+ userHome.resolve(Paths.get("AppData", "Local")) + " nor "
+							+ userHome.resolve(Paths.get("Local Settings", "Application Data")) + " have been found");
+			}
+			home = localData;
+		}
+
+		return home;
 	}
 
 	private static Path findOwnJarFile() {
