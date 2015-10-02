@@ -259,7 +259,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 	//</editor-fold>
 
-	//<editor-fold defaultstate="collapsed" desc="LXC Container Caosule Agent-based Monitoring">
+	//<editor-fold defaultstate="collapsed" desc="LXC Container Capsule Agent-based Monitoring">
 	@Override
 	@SuppressWarnings("unchecked")
 	protected <T> T attribute(Map.Entry<String, T> attr) {
@@ -1051,7 +1051,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 					throw new AssertionError(e);
 				}
 			} else
-				throw new RuntimeException("Can't locate capsule's own class");
+				throw new RuntimeException("Can't locate Capsule's own class");
 		}
 		return hostAbsoluteOwnJarFile;
 	}
