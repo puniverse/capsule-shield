@@ -5,12 +5,11 @@
 * of the Eclipse Public License v1.0, available at
 * http://www.eclipse.org/legal/epl-v10.html
 */
-package capsule;
+package co.paralleluniverse.capsule.shield;
 
 import java.lang.reflect.AccessibleObject;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+
 import sun.net.spi.nameservice.NameService;
 import sun.net.spi.nameservice.NameServiceDescriptor;
 
@@ -40,7 +39,7 @@ public class CapsuleNameServiceDescriptor implements NameServiceDescriptor {
             } catch(ReflectiveOperationException e) {
             }
 
-            // capsule 1.0.0
+            // co.paralleluniverse.capsule.shield.capsule 1.0.0
             Object c;
             c = accessible(capsuleClass.getDeclaredField("CAPSULE")).get(null);
             c = accessible(capsuleClass.getDeclaredField("cc")).get(c);
