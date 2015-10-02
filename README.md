@@ -37,6 +37,7 @@ The following additional manifest entries and capsule options can be used to cus
   * `capsule.shield.lxc.destroyOnly` capsule option: if present or `true`, the container will be forcibly destroyed without re-creating and booting it afterwards.
   * `capsule.shield.lxc.privileged` capsule option: whether the container will be a privileged one or not; unprivileged containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/) and are safer (default: `false`).
   * `capsule.shield.jmx` capsule option: whether JMX will be proxied from the capsule parent process to the container (default: `true`).
+  * `capsule.shield.redirect` capsule option: whether Log4J events should be redirected to a SocketNode running in the capsule process (default: `true`, requires `capsule.shield.jmx`).
 
   * Valid for both privileged and unprivileged containers:
     * `capsule.shield.lxc.sysShareDir` capsule option: the location of the LXC toolchain's system-wide `share` directory; this is installation/distro-dependent but the default should work in most cases (default: `/usr/share/lxc`).

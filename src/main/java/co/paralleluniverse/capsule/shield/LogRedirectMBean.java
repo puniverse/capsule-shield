@@ -12,6 +12,6 @@ import java.net.InetSocketAddress;
 /**
  * @author circlespainter
  */
-public interface LogForwardMBean {
-	boolean forwardLog4j(InetSocketAddress to) throws Exception;
+public interface LogRedirectMBean {
+	void redirectLog4j(InetSocketAddress to) throws Exception;
 }
