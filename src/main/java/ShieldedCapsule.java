@@ -158,9 +158,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		try {
 			if (emptyOrTrue(getProperty(OPT_LXC_DESTROY_ONLY))) {
 				destroyContainer();
-				if (Files.exists(getShieldContainersAppDir()) && Files.list(getShieldContainersAppDir()).count() == 0)
+				if (Files.exists(getShieldContainersAppDir()) && getShieldContainersAppDir().toFile().list().length == 0)
 					Files.delete(getShieldContainersAppDir());
-				if (Files.exists(getShieldContainersAppDir().getParent()) && Files.list(getShieldContainersAppDir().getParent()).count() == 0)
+				if (Files.exists(getShieldContainersAppDir().getParent()) && getShieldContainersAppDir().getParent().toFile().list().length == 0)
 					Files.delete(getShieldContainersAppDir().getParent());
 				return null;
 			}
