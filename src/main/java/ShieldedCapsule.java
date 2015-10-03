@@ -35,6 +35,8 @@ import java.rmi.server.RMIServerSocketFactory;
 import java.util.*;
 import java.util.Map.Entry;
 
+import org.slf4j.bridge.SLF4JBridgeHandler;
+
 /**
  * @author pron
  * @author circlespainter
@@ -89,6 +91,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	//<editor-fold defaultstate="collapsed" desc="Configuration">
 	private static final String OPT_REDIRECT_LOG4J = OPTION("capsule.shield.redirectLog4j", "true", null, false, "Whether Log4J events should be redirected to a SocketNode running in the capsule process");
+	private static final String OPT_SLF4J_VER = OPTION("capsule.shield.redirectLog4j.slf4jVer", "1.7.12", null, false, "The SLF4J version that will be used as a bridge to Log4J when redirecting application logs");
+	private static final String OPT_LOG4J2_VER = OPTION("capsule.shield.redirectLog4j.log4j2Ver", "2.4", null, false, "The Log4J2 version that will be used as a bridge to SLF4J when redirecting application logs");
+	private static final String OPT_LOG4J_VER = OPTION("capsule.shield.redirectLog4j.log4jVer", "1.2.17", null, false, "The Log4J version that will be used when redirecting application logs");
 
 	private static final String OPT_LXC_DESTROY_ONLY = OPTION("capsule.shield.lxc.destroyOnly", "false", null, false, "Whether the container should be only destroyed without booting it afterwards");
 
@@ -150,6 +155,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static Inet4Address vnetHostIPv4;
 	private static Inet4Address vnetContainerIPv4;
 	private static ServerSocket snss;
+	private static boolean includedBasicLoggingRedirectorsForClassPath, includedBasicLoggingRedirectorsForDeps;
 
 	public ShieldedCapsule(Capsule pred) {
 		super(pred);
@@ -202,6 +208,68 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	//<editor-fold defaultstate="collapsed" desc="LXC Container Log4J Redirect">
+	//////////////////////////// MAIN CAPSULE //////////////////////////////
+	@SuppressWarnings("unchecked")
+	private <T> T setupLog4jRedirJvmFlags(Entry<String, T> attr) {
+		if (emptyOrTrue(getProperty(OPT_REDIRECT_LOG4J))) {
+			log(LOG_VERBOSE, "Requested Log4J redirection to the capsule process's SocketNode");
+			int port = setupSocketNode();
+			List<String> l = (List<String>) attr.getValue();
+			if (l == null) l = new ArrayList<>();
+			l.add("-Dlog4j.defaultInitOverride=true");
+			try {
+				l.add("-D" + PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE + "=" + getVNetHostIPv4().getHostAddress() + ":" + port);
+			} catch (final SocketException e) {
+				throw new RuntimeException(e);
+			}
+			return (T) l;
+		}
+		return null;
+	}
+
+	@SuppressWarnings("deprecation")
+	@Override
+	protected Object lookup0(Object x, String type, Entry<String, ?> attrContext, Object context) {
+		if (emptyOrTrue(getProperty(OPT_REDIRECT_LOG4J))) {
+			final List<Object> ret = new ArrayList<>(8);
+			final List<Object> lookupRes = new ArrayList<>(8);
+			if (ATTR_APP_CLASS_PATH.getKey().equals(attrContext.getKey()) && !includedBasicLoggingRedirectorsForClassPath ||
+				ATTR_DEPENDENCIES.getKey().equals(attrContext.getKey()) && !includedBasicLoggingRedirectorsForDeps) {
+				lookupRes.add(super.lookup0("org.slf4j:jul-to-slf4j:" + getProperty(OPT_SLF4J_VER), type, attrContext, context));
+				lookupRes.add(super.lookup0("org.slf4j:slf4j-log4j12:" + getProperty(OPT_SLF4J_VER), type, attrContext, context));
+				lookupRes.add(super.lookup0("log4j:log4j:" + getProperty(OPT_LOG4J_VER), type, attrContext, context));
+
+				if (ATTR_APP_CLASS_PATH.getKey().equals(attrContext.getKey()))
+					includedBasicLoggingRedirectorsForClassPath = true;
+				else if (ATTR_DEPENDENCIES.getKey().equals(attrContext.getKey()))
+					includedBasicLoggingRedirectorsForDeps = true;
+			}
+
+			if (x instanceof String) {
+				final String a = (String) x;
+				if (a.startsWith("commons-logging:commons-logging")) {
+					log(LOG_VERBOSE, "Setting up JCL redirection -> SLF4J (-> Log4J)");
+					lookupRes.add(super.lookup0("org.slf4j:jcl-over-slf4j:" + getProperty(OPT_SLF4J_VER), type, attrContext, context));
+				} else if (a.startsWith("org.apache.logging.log4j:log4j")) {
+					log(LOG_VERBOSE, "Setting up Log4J V2 redirection -> SLF4J (-> Log4J)");
+					lookupRes.add(super.lookup0("org.apache.logging.log4j:log4j-to-slf4j:" + getProperty(OPT_LOG4J2_VER), type, attrContext, context));
+				} else
+					lookupRes.add(super.lookup0(a, type, attrContext, context));
+			} else
+				lookupRes.add(super.lookup0(x, type, attrContext, context));
+
+			for (final Object o : lookupRes) {
+				if (o instanceof Collection)
+					ret.addAll((Collection) o);
+				else if (o != null)
+					ret.add(o);
+			}
+			return ret;
+		} else {
+			return super.lookup0(x, type, attrContext, context);
+		}
+	}
+
 	private int setupSocketNode() {
 		try {
 			log(LOG_VERBOSE, "Loading application's Log4J configuration");
@@ -252,22 +320,36 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		startThread("capsule-log4j-socketnode", "socketNode");
 	}
 
-	@SuppressWarnings("unchecked")
-	private <T> T setupLog4jRedirJvmFlags(Entry<String, T> attr) {
-		if (emptyOrTrue(getProperty(OPT_REDIRECT_LOG4J))) {
-			log(LOG_VERBOSE, "Requested Log4J redirection to the capsule process's SocketNode");
-			int port = setupSocketNode();
-			List<String> l = (List<String>) attr.getValue();
-			if (l == null) l = new ArrayList<>();
-			l.add("-Dlog4j.defaultInitOverride=true");
+	//////////////////////////// CAPSULE AGENT //////////////////////////////
+	@Override
+	protected final void agent(Instrumentation inst) {
+		// setLinkNameService(); // must be done before call to super
+		try {
+			redirectJUL();
+			redirectLog4j(); // must be done before call to super
+		} catch (final Exception e) {
+			throw new RuntimeException(e);
+		}
+		super.agent(inst);
+	}
+
+	private void redirectJUL() {
+		log(LOG_VERBOSE, "Setting up JUL redirection -> SLF4J (-> Log4J)");
+		SLF4JBridgeHandler.removeHandlersForRootLogger();
+		SLF4JBridgeHandler.install();
+	}
+
+	private void redirectLog4j() throws Exception {
+		if (emptyOrTrue(getProperty(OPT_REDIRECT_LOG4J)) && isAgent()) {
+			final String[] addr = System.getProperty(PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE).split(":");
 			try {
-				l.add("-D" + PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE + "=" + getVNetHostIPv4().getHostAddress() + ":" + port);
-			} catch (final SocketException e) {
+				log(LOG_VERBOSE, "Setting up Log4J SocketAppender for root logger ->  " + addr[0] + ":" + addr[1]);
+				final SocketAppender sa = new SocketAppender(addr[0], Integer.parseInt(addr[1]));
+				LogManager.getRootLogger().addAppender(sa);
+			} catch (final Exception e) {
 				throw new RuntimeException(e);
 			}
-			return (T) l;
 		}
-		return null;
 	}
 	//</editor-fold>
 
@@ -771,7 +853,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	protected Entry<String, Path> chooseJavaHome() {
 		Entry<String, Path> res = super.chooseJavaHome();
 		if (res == null)
-			res = entry(getProperty(PROP_JAVA_VERSION), Paths.get(getProperty(PROP_JAVA_HOME)));
+			res = entry(System.getProperty(PROP_JAVA_VERSION), Paths.get(System.getProperty(PROP_JAVA_HOME)));
 		origJavaHome = res.getValue();
 		return entry(res.getKey(), CONTAINER_ABSOLUTE_JAVA_HOME);
 	}
@@ -859,28 +941,6 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	//<editor-fold defaultstate="collapsed" desc="LXC Container NameService">
 	/////////// NameService ///////////////////////////////////
-	protected void agent(Instrumentation inst) {
-		// setLinkNameService(); // must be done before call to super
-		try {
-			redirectLog4j(); // must be done before call to super
-		} catch (final Exception e) {
-			throw new RuntimeException(e);
-		}
-		super.agent(inst);
-	}
-
-	private void redirectLog4j() throws Exception {
-		if (emptyOrTrue(getProperty(OPT_REDIRECT_LOG4J)) && isAgent()) {
-			final String[] addr = getProperty(PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE).split(":");
-			try {
-				log(LOG_VERBOSE, "Setting up root logger to log to Log4J SocketAppender ->  " + addr[0] + ":" + addr[1]);
-				final SocketAppender sa = new SocketAppender(addr[0], Integer.parseInt(addr[1]));
-				LogManager.getRootLogger().addAppender(sa);
-			} catch (final Exception e) {
-				throw new RuntimeException(e);
-			}
-		}
-	}
 
 	/*
 	private static void setLinkNameService() {

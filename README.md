@@ -38,6 +38,9 @@ The following additional manifest entries and capsule options can be used to cus
   * `capsule.shield.lxc.privileged` capsule option: whether the container will be a privileged one or not; unprivileged containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/) and are safer (default: `false`).
   * `capsule.shield.jmx` capsule option: whether JMX will be proxied from the capsule parent process to the container (default: `true`).
   * `capsule.shield.redirect` capsule option: whether Log4J events should be redirected to a SocketNode running in the capsule process (default: `true`, requires `capsule.shield.jmx`).
+  * `capsule.shield.redirectLog4j.slf4jVer` capsule option: the SLF4J version that will be used as a bridge to Log4J when redirecting application logs (default: `1.7.12`, requires `capsule.shield.redirect` and potentially `MavenCapsule` if the relevant JARs are not already included in the capsule).
+  * `capsule.shield.redirectLog4j.log4j2Ver` capsule option: the version of the Log4J V2 bridge to SLF4J when redirecting application logs (default: `2.4`, requires `capsule.shield.redirect` and potentially `MavenCapsule` if the relevant JARs are not already included in the capsule).
+  * `capsule.shield.redirectLog4j` capsule option: the Log4J version that will be used when redirecting application logs (default: `1.2.17`, requires `capsule.shield.redirect` and potentially `MavenCapsule` if the relevant JARs are not already included in the capsule).
 
   * Valid for both privileged and unprivileged containers:
     * `capsule.shield.lxc.sysShareDir` capsule option: the location of the LXC toolchain's system-wide `share` directory; this is installation/distro-dependent but the default should work in most cases (default: `/usr/share/lxc`).
