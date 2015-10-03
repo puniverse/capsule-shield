@@ -1,20 +1,18 @@
 /*
- * Copyright (c) 2015, Parallel Universe Software Co. and Contributors. All rights reserved.
+ * Copyright (c) 2015, Prallel Universe Software Co. and Contributors. All rights reserved.
  *
  * This program and the accompanying materials are licensed under the terms
  * of the Eclipse Public License v1.0, available at
  * http://www.eclipse.org/legal/epl-v10.html
  */
 
-import co.paralleluniverse.capsule.shield.LogRedirectMBean;
+import co.paralleluniverse.common.JarClassLoader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.log4j.MDC;
 import org.apache.log4j.net.SocketAppender;
 import org.apache.log4j.net.SocketNode;
 import sun.net.spi.nameservice.NameService;
 
-import javax.management.*;
 import javax.management.remote.JMXServiceURL;
 import javax.management.remote.rmi.RMIConnectorServer;
 import javax.net.ServerSocketFactory;
@@ -137,14 +135,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String MEM_SHARES_DESC = "`cgroup` memory shares";
 	private static final String OPT_MEMORY_LIMIT = OPTION("capsule.shield.memoryLimit", null, null, false, MEM_SHARES_DESC);
 	private static final Entry<String, Long> ATTR_MEMORY_LIMIT = ATTRIBUTE("Memory-Limit", T_LONG(), null, true, MEM_SHARES_DESC);
-	private static final ObjectName LOG_REDIRECT_MBEAN_NAME;
-	static {
-		try {
-			LOG_REDIRECT_MBEAN_NAME = new ObjectName("co.paralleluniverse.shield:type=LogRedirect");
-		} catch (final MalformedObjectNameException e) {
-			throw new AssertionError(e);
-		}
-	}
+	private static final String PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE = "capsule.shield.internal.socketNode";
 	//</editor-fold>
 
 	private static String distroType;
@@ -158,6 +149,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	private static Inet4Address vnetHostIPv4;
 	private static Inet4Address vnetContainerIPv4;
+	private static ServerSocket snss;
 
 	public ShieldedCapsule(Capsule pred) {
 		super(pred);
@@ -193,7 +185,6 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		try {
 			pb.command().addAll(0,
 					Arrays.asList("lxc-execute",
-							"--logfile=lxc.log",
 							"--logpriority=" + lxcLogLevel(getLogLevel()),
 							"-P", getContainerParentDir().toString(),
 							"-n", CONTAINER_NAME,
@@ -208,76 +199,75 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	@Override
 	protected final void liftoff() {
 		setupDefaultGW();
-		if (emptyOrTrue(getProperty(OPT_REDIRECT_LOG4J))) {
-			log(LOG_VERBOSE, "Requested Log4J redirection to the capsule process's SocketNode: initializing the JMX-RMI channel");
-			getMBeanServerConnection(); // Initialize JMX
-			setupLogRedirect();
-		}
 	}
 
 	//<editor-fold defaultstate="collapsed" desc="LXC Container Log4J Redirect">
-	private void setupLogRedirect() {
-		if (emptyOrTrue(getProperty(OPT_REDIRECT_LOG4J))) {
+	private int setupSocketNode() {
+		try {
+			log(LOG_VERBOSE, "Loading application's Log4J configuration");
+			final ClassLoader backup = Thread.currentThread().getContextClassLoader();
+			if (isWrapperCapsule()) {
+				final ClassLoader jarLoader = new JarClassLoader(getJarFile(), backup, true);
+				Thread.currentThread().setContextClassLoader(jarLoader);
+			}
+			Logger.getRootLogger().info("Application's Log4j configuration loaded");
+			if (isWrapperCapsule()) {
+				Thread.currentThread().setContextClassLoader(backup);
+			}
+			snss = new ServerSocket(0);
+			startSocketNode();
+			return snss.getLocalPort();
+		} catch (final IOException e) {
+			log(LOG_QUIET, "Couldn't enable Log4J redirect: " + e.getMessage());
+			log(LOG_QUIET, e);
+			throw new RuntimeException((e));
+		}
+	}
+
+	@SuppressWarnings("unused")
+	private void socketNode() {
+		//noinspection InfiniteLoopStatement
+		while (true) {
+			Socket s = null;
 			try {
-				final ServerSocket snss = new ServerSocket(0);
-				startSocketNode(snss);
-				log(LOG_VERBOSE, "Asking agent to redirect Log4j to SocketNode at " + getVNetHostIPv4().getHostAddress() + ":" + snss.getLocalPort());
-				final LogRedirectMBean lrmb = JMX.newMBeanProxy(getMBeanServerConnection(), LOG_REDIRECT_MBEAN_NAME, LogRedirectMBean.class);
-				lrmb.redirectLog4j(new InetSocketAddress(getVNetHostIPv4(), snss.getLocalPort()));
-			} catch (final Exception e) {
-				log(LOG_QUIET, "Couldn't enable redirect log: " + e.getMessage());
-				log(LOG_QUIET, e);
+				s = snss.accept();
+			} catch (final IOException t) {
+				log(LOG_QUIET, "Couldn't accept Log4J SocketNode connections: " + t.getMessage());
+				log(LOG_QUIET, t);
 			}
-		}
-	}
-
-	private void startSocketNode(final ServerSocket snss) throws SocketException {
-		MDC.put("hostname", getVNetHostIPv4());
-		log(LOG_VERBOSE, "Starting SocketNode");
-		new Thread(new Runnable() {
-			@Override
-			public void run() {
-				//noinspection InfiniteLoopStatement
-				while (true) {
-					Socket s = null;
-					try {
-						s = snss.accept();
-					} catch (final IOException t) {
-						log(LOG_QUIET, "Couldn't accept SocketNode connections: " + t.getMessage());
-						log(LOG_QUIET, t);
-					}
-					if (s != null) {
-						try {
-							log(LOG_VERBOSE, "Agent connected to SocketNode");
-							new SocketNode(s, LogManager.getLoggerRepository()).run();
-						} catch (final Throwable t) {
-							log(LOG_QUIET, "SocketNode interrupted: " + t.getMessage());
-							log(LOG_QUIET, t);
-						}
-					}
-				}
-			}
-		}, "capsule-log4j-socketnode").start();
-	}
-
-	private final class LogRedirect implements LogRedirectMBean {
-		@Override
-		public void redirectLog4j(InetSocketAddress to) throws Exception {
-			if (isAgent()) {
-				log(LOG_QUIET, "Redirecting all loggers to Log4J SocketAppender ->  " + to.getAddress().getHostAddress() + ":" + to.getPort());
-				LogManager.resetConfiguration();
-				final SocketAppender sa = new SocketAppender(to.getAddress().getHostAddress(), to.getPort());
-				final Enumeration loggers = LogManager.getCurrentLoggers();
-				while (loggers.hasMoreElements()) {
-					final Logger l = (Logger) loggers.nextElement();
-					l.addAppender(sa);
+			if (s != null) {
+				try {
+					log(LOG_VERBOSE, "Agent connected to Log4J SocketNode");
+					new SocketNode(s, LogManager.getLoggerRepository()).run();
+				} catch (final Throwable t) {
+					log(LOG_QUIET, "Log4J SocketNode interrupted: " + t.getMessage());
+					log(LOG_QUIET, t);
 				}
 			}
 		}
 	}
 
-	private void registerLogRedirectMBean(MBeanServer mbs) throws NotCompliantMBeanException, InstanceAlreadyExistsException, MBeanRegistrationException {
-		mbs.registerMBean(new StandardMBean(new LogRedirect(), LogRedirectMBean.class), LOG_REDIRECT_MBEAN_NAME);
+	private void startSocketNode() throws SocketException {
+		log(LOG_VERBOSE, "Starting Log4J SocketNode");
+		startThread("capsule-log4j-socketnode", "socketNode");
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T setupLog4jRedirJvmFlags(Entry<String, T> attr) {
+		if (emptyOrTrue(getProperty(OPT_REDIRECT_LOG4J))) {
+			log(LOG_VERBOSE, "Requested Log4J redirection to the capsule process's SocketNode");
+			int port = setupSocketNode();
+			List<String> l = (List<String>) attr.getValue();
+			if (l == null) l = new ArrayList<>();
+			l.add("-Dlog4j.defaultInitOverride=true");
+			try {
+				l.add("-D" + PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE + "=" + getVNetHostIPv4().getHostAddress() + ":" + port);
+			} catch (final SocketException e) {
+				throw new RuntimeException(e);
+			}
+			return (T) l;
+		}
+		return null;
 	}
 	//</editor-fold>
 
@@ -357,6 +347,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	protected <T> T attribute(Map.Entry<String, T> attr) {
 		if (ATTR_AGENT == attr && emptyOrTrue(getProperty(OPT_JMX)))
 			return (T) Boolean.TRUE;
+		if (ATTR_JVM_ARGS == attr) {
+			return setupLog4jRedirJvmFlags(attr);
+		}
 		return super.attribute(attr);
 	}
 
@@ -403,20 +396,12 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			env.put(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE, serverFactory);
 			final RMIConnectorServer rmiServer = new RMIConnectorServer(jmxServiceURL, env, ManagementFactory.getPlatformMBeanServer());
 			rmiServer.start();
-
-			registerMBeans();
-
 			return jmxServiceURL;
 		} catch (final Exception e) {
 			log(LOG_VERBOSE, "JMXConnectorServer failed: " + e.getMessage());
 			log(LOG_VERBOSE, e);
 			return null;
 		}
-	}
-
-	private void registerMBeans() throws MalformedObjectNameException, NotCompliantMBeanException, InstanceAlreadyExistsException, MBeanRegistrationException {
-		final MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-		registerLogRedirectMBean(mbs);
 	}
 
 	private boolean setupAgentAndJMXProps(List<String> command) {
@@ -876,14 +861,25 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	/////////// NameService ///////////////////////////////////
 	protected void agent(Instrumentation inst) {
 		// setLinkNameService(); // must be done before call to super
-
 		try {
-			MDC.put("hostname", getVNetContainerIPv4());
-		} catch (SocketException e) {
+			redirectLog4j(); // must be done before call to super
+		} catch (final Exception e) {
 			throw new RuntimeException(e);
 		}
-
 		super.agent(inst);
+	}
+
+	private void redirectLog4j() throws Exception {
+		if (emptyOrTrue(getProperty(OPT_REDIRECT_LOG4J)) && isAgent()) {
+			final String[] addr = getProperty(PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE).split(":");
+			try {
+				log(LOG_VERBOSE, "Setting up root logger to log to Log4J SocketAppender ->  " + addr[0] + ":" + addr[1]);
+				final SocketAppender sa = new SocketAppender(addr[0], Integer.parseInt(addr[1]));
+				LogManager.getRootLogger().addAppender(sa);
+			} catch (final Exception e) {
+				throw new RuntimeException(e);
+			}
+		}
 	}
 
 	/*
