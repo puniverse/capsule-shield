@@ -235,8 +235,11 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			final List<Object> lookupRes = new ArrayList<>(8);
 			if (ATTR_APP_CLASS_PATH.getKey().equals(attrContext.getKey()) && !includedBasicLoggingRedirectorsForClassPath ||
 				ATTR_DEPENDENCIES.getKey().equals(attrContext.getKey()) && !includedBasicLoggingRedirectorsForDeps) {
+				log(LOG_VERBOSE, "Setting up JUL redirection -> SLF4J (-> Log4J), context " + attrContext.getKey());
 				lookupRes.add(super.lookup0("org.slf4j:jul-to-slf4j:" + getProperty(OPT_SLF4J_VER), type, attrContext, context));
+				log(LOG_VERBOSE, "Setting up JCL redirection -> SLF4J (-> Log4J), context " + attrContext.getKey());
 				lookupRes.add(super.lookup0("org.slf4j:slf4j-log4j12:" + getProperty(OPT_SLF4J_VER), type, attrContext, context));
+				log(LOG_VERBOSE, "Setting up JCL redirection -> SLF4J (-> Log4J), context " + attrContext.getKey());
 				lookupRes.add(super.lookup0("log4j:log4j:" + getProperty(OPT_LOG4J_VER), type, attrContext, context));
 
 				if (ATTR_APP_CLASS_PATH.getKey().equals(attrContext.getKey()))
@@ -248,10 +251,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			if (x instanceof String) {
 				final String a = (String) x;
 				if (a.startsWith("commons-logging:commons-logging")) {
-					log(LOG_VERBOSE, "Setting up JCL redirection -> SLF4J (-> Log4J)");
+					log(LOG_VERBOSE, "Setting up JCL redirection -> SLF4J (-> Log4J), context " + attrContext.getKey());
 					lookupRes.add(super.lookup0("org.slf4j:jcl-over-slf4j:" + getProperty(OPT_SLF4J_VER), type, attrContext, context));
 				} else if (a.startsWith("org.apache.logging.log4j:log4j")) {
-					log(LOG_VERBOSE, "Setting up Log4J V2 redirection -> SLF4J (-> Log4J)");
+					log(LOG_VERBOSE, "Setting up Log4J V2 redirection -> SLF4J (-> Log4J), context " + attrContext.getKey());
 					lookupRes.add(super.lookup0("org.apache.logging.log4j:log4j-to-slf4j:" + getProperty(OPT_LOG4J2_VER), type, attrContext, context));
 				} else
 					lookupRes.add(super.lookup0(a, type, attrContext, context));
