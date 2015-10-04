@@ -306,6 +306,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 					try {
 						s = snss.accept();
 					} catch (final IOException t) {
+						// TODO understand
+						// `ShieldedCapsule.super.log()` seems to generate accessors that are needed to successfully perform the call.
+						// Any of `log`, `ShieldedCapsule.log`, `Capsule.log`, `ShieldedCapsule.this.log` performs a direct call which
+						// results in an `IllegalAccessError`.
 						ShieldedCapsule.super.log(LOG_QUIET, "Couldn't accept Log4J SocketNode connections: " + t.getMessage());
 						ShieldedCapsule.super.log(LOG_QUIET, t);
 					}
