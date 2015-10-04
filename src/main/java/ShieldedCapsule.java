@@ -295,32 +295,32 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 	}
 
-	@SuppressWarnings("unused")
-	private void socketNode() {
-		//noinspection InfiniteLoopStatement
-		while (true) {
-			Socket s = null;
-			try {
-				s = snss.accept();
-			} catch (final IOException t) {
-				log(LOG_QUIET, "Couldn't accept Log4J SocketNode connections: " + t.getMessage());
-				log(LOG_QUIET, t);
-			}
-			if (s != null) {
-				try {
-					log(LOG_VERBOSE, "Agent connected to Log4J SocketNode");
-					new SocketNode(s, LogManager.getLoggerRepository()).run();
-				} catch (final Throwable t) {
-					log(LOG_QUIET, "Log4J SocketNode interrupted: " + t.getMessage());
-					log(LOG_QUIET, t);
-				}
-			}
-		}
-	}
-
 	private void startSocketNode() throws SocketException {
 		log(LOG_VERBOSE, "Starting Log4J SocketNode");
-		startThread("capsule-log4j-socketnode", "socketNode");
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				//noinspection InfiniteLoopStatement
+				while (true) {
+					Socket s = null;
+					try {
+						s = snss.accept();
+					} catch (final IOException t) {
+						ShieldedCapsule.super.log(LOG_QUIET, "Couldn't accept Log4J SocketNode connections: " + t.getMessage());
+						ShieldedCapsule.super.log(LOG_QUIET, t);
+					}
+					if (s != null) {
+						try {
+							ShieldedCapsule.super.log(LOG_VERBOSE, "Agent connected to Log4J SocketNode");
+							new SocketNode(s, LogManager.getLoggerRepository()).run();
+						} catch (final Throwable t) {
+							ShieldedCapsule.super.log(LOG_QUIET, "Log4J SocketNode interrupted: " + t.getMessage());
+							ShieldedCapsule.super.log(LOG_QUIET, t);
+						}
+					}
+				}
+			}
+		}, "capsule-shield-log4j-socketnode").start();
 	}
 
 	//////////////////////////// CAPSULE AGENT //////////////////////////////
