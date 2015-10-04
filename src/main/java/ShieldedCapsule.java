@@ -207,7 +207,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		setupDefaultGW();
 	}
 
-	//<editor-fold defaultstate="collapsed" desc="LXC Container Log4J Redirect">
+	//<editor-fold defaultstate="collapsed" desc="Shield Container Log4J Redirect">
 	//////////////////////////// MAIN CAPSULE //////////////////////////////
 	@SuppressWarnings("unchecked")
 	private <T> T setupLog4jRedirJvmFlags(Entry<String, T> attr) {
@@ -353,77 +353,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 	//</editor-fold>
 
-	//<editor-fold defaultstate="collapsed" desc="LXC Container Networking setup">
-	private void setupDefaultGW() {
-		if (getOptionOrAttributeBool(OPT_SET_DEFAULT_GW, ATTR_SET_DEFAULT_GW)) {
-			try {
-				log(LOG_VERBOSE, "Setting the default gateway for the container to " + getVNetHostIPv4().getHostAddress());
-				exec("lxc-attach", "-P", getContainerParentDir().toString(), "-n", "lxc", "--", "/sbin/route", "add", "default", "gw", getVNetHostIPv4().getHostAddress());
-			} catch (final IOException e) {
-				log(LOG_QUIET, "Couldn't enable internet: " + e.getMessage());
-				log(LOG_QUIET, e);
-			}
-		}
-	}
-	//</editor-fold>
-
-	//<editor-fold defaultstate="collapsed" desc="LXC Container (Re-)Creation/Deletion">
-	private boolean isBuildNeeded() throws IOException {
-		// Check if the conf files exist
-		if (!Files.exists(getConfPath()) || !Files.exists(getNetworkedPath()))
-			return true;
-
-		// Check if the conf content has changed
-		if (!new String(Files.readAllBytes(getConfPath()), Charset.defaultCharset()).equals(getConf())) {
-			log(LOG_VERBOSE, "Conf file " + getConfPath() + " content has changed");
-			return true;
-		}
-		if (!new String(Files.readAllBytes(getNetworkedPath()), Charset.defaultCharset()).equals(getNetworked())) {
-			log(LOG_VERBOSE, "'networked' script " + getNetworkedPath() + " content has changed");
-			return true;
-		}
-
-		// Check if the application is newer
-		try {
-			FileTime jarTime = Files.getLastModifiedTime(getJarFile());
-			if (isWrapperCapsule()) {
-				FileTime wrapperTime = Files.getLastModifiedTime(findOwnJarFile());
-				if (wrapperTime.compareTo(jarTime) > 0)
-					jarTime = wrapperTime;
-			}
-
-			final FileTime confTime = Files.getLastModifiedTime(getConfPath());
-			final FileTime networkedTime = Files.getLastModifiedTime(getNetworkedPath());
-			return confTime.compareTo(jarTime) < 0 || networkedTime.compareTo(jarTime) < 0;
-		} catch (final IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	private void createContainer() throws IOException, InterruptedException {
-		destroyContainer();
-
-		log(LOG_VERBOSE, "Writing LXC configuration");
-		writeConfFile();
-		log(LOG_VERBOSE, "Written conf file: " + getConfPath());
-
-		log(LOG_VERBOSE, "Creating rootfs");
-		createRootFS();
-		log(LOG_VERBOSE, "Rootfs created at: " + getRootFSDir());
-	}
-
-	private void destroyContainer() {
-		log(LOG_VERBOSE, "Forcibly destroying existing LXC container");
-		try {
-			exec("lxc-destroy", "-n", CONTAINER_NAME, "-P", getShieldContainersAppDir().toString());
-		} catch (final Throwable e) {
-			log(LOG_QUIET, "Warning: couldn't destroy pre-existing container, " + e.getMessage());
-			log(LOG_DEBUG, e);
-		}
-	}
-	//</editor-fold>
-
-	//<editor-fold defaultstate="collapsed" desc="LXC Container Capsule Agent-based Monitoring">
+	//<editor-fold defaultstate="collapsed" desc="Shield Container Capsule Agent-based Monitoring">
 	@Override
 	@SuppressWarnings("unchecked")
 	protected <T> T attribute(Map.Entry<String, T> attr) {
@@ -506,6 +436,76 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			}
 		}
 		return false;
+	}
+	//</editor-fold>
+
+	//<editor-fold defaultstate="collapsed" desc="LXC Container Networking setup">
+	private void setupDefaultGW() {
+		if (getOptionOrAttributeBool(OPT_SET_DEFAULT_GW, ATTR_SET_DEFAULT_GW)) {
+			try {
+				log(LOG_VERBOSE, "Setting the default gateway for the container to " + getVNetHostIPv4().getHostAddress());
+				exec("lxc-attach", "-P", getContainerParentDir().toString(), "-n", "lxc", "--", "/sbin/route", "add", "default", "gw", getVNetHostIPv4().getHostAddress());
+			} catch (final IOException e) {
+				log(LOG_QUIET, "Couldn't enable internet: " + e.getMessage());
+				log(LOG_QUIET, e);
+			}
+		}
+	}
+	//</editor-fold>
+
+	//<editor-fold defaultstate="collapsed" desc="LXC Container (Re-)Creation/Deletion">
+	private boolean isBuildNeeded() throws IOException {
+		// Check if the conf files exist
+		if (!Files.exists(getConfPath()) || !Files.exists(getNetworkedPath()))
+			return true;
+
+		// Check if the conf content has changed
+		if (!new String(Files.readAllBytes(getConfPath()), Charset.defaultCharset()).equals(getConf())) {
+			log(LOG_VERBOSE, "Conf file " + getConfPath() + " content has changed");
+			return true;
+		}
+		if (!new String(Files.readAllBytes(getNetworkedPath()), Charset.defaultCharset()).equals(getNetworked())) {
+			log(LOG_VERBOSE, "'networked' script " + getNetworkedPath() + " content has changed");
+			return true;
+		}
+
+		// Check if the application is newer
+		try {
+			FileTime jarTime = Files.getLastModifiedTime(getJarFile());
+			if (isWrapperCapsule()) {
+				FileTime wrapperTime = Files.getLastModifiedTime(findOwnJarFile());
+				if (wrapperTime.compareTo(jarTime) > 0)
+					jarTime = wrapperTime;
+			}
+
+			final FileTime confTime = Files.getLastModifiedTime(getConfPath());
+			final FileTime networkedTime = Files.getLastModifiedTime(getNetworkedPath());
+			return confTime.compareTo(jarTime) < 0 || networkedTime.compareTo(jarTime) < 0;
+		} catch (final IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private void createContainer() throws IOException, InterruptedException {
+		destroyContainer();
+
+		log(LOG_VERBOSE, "Writing LXC configuration");
+		writeConfFile();
+		log(LOG_VERBOSE, "Written conf file: " + getConfPath());
+
+		log(LOG_VERBOSE, "Creating rootfs");
+		createRootFS();
+		log(LOG_VERBOSE, "Rootfs created at: " + getRootFSDir());
+	}
+
+	private void destroyContainer() {
+		log(LOG_VERBOSE, "Forcibly destroying existing LXC container");
+		try {
+			exec("lxc-destroy", "-n", CONTAINER_NAME, "-P", getShieldContainersAppDir().toString());
+		} catch (final Throwable e) {
+			log(LOG_QUIET, "Warning: couldn't destroy pre-existing container, " + e.getMessage());
+			log(LOG_DEBUG, e);
+		}
 	}
 	//</editor-fold>
 
