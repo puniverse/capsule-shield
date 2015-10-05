@@ -13,8 +13,8 @@ import java.lang.reflect.InvocationTargetException;
 import sun.net.spi.nameservice.NameService;
 import sun.net.spi.nameservice.NameServiceDescriptor;
 
-public class CapsuleNameServiceDescriptor implements NameServiceDescriptor {
-    public CapsuleNameServiceDescriptor() {
+public class ShieldedCapsuleNameServiceDescriptor implements NameServiceDescriptor {
+    public ShieldedCapsuleNameServiceDescriptor() {
     }
 
     public String getProviderName() {

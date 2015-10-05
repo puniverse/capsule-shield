@@ -1,5 +1,16 @@
-apply plugin: 'java'
-apply plugin:'application'
+buildscript {
+    dependencies {
+        classpath 'net.sf.proguard:proguard-gradle:5.0'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '1.2.1'
+    id 'maven'
+    id 'signing'
+    // id 'net.sf.proguard.proguard-gradle' version '5.0'
+}
 
 sourceCompatibility = '1.7'
 targetCompatibility = '1.7'
@@ -54,14 +65,46 @@ dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }
 
-jar {
-    from { configurations.runtime.collect { zipTree(it) } }
+shadowJar {
+    outputs.upToDateWhen { false }
+
+    // artifactAttached = false
+    classifier = '' // overwrite jar
+    destinationDir = file("$buildDir/libs")
+
+    exclude 'META-INF/**'
+    exclude 'org/apache/log4j/xml/log4j.dtd'
+
+    relocate 'org.', 'capsule.org.'
+
     manifest {
         attributes (
             'Premain-Class' : mainClassName,
             'Main-Class'    : mainClassName,
             'Caplets'       : 'ShieldedCapsule'
         )
+    }
+}
+
+task proguard(type: proguard.gradle.ProGuardTask, dependsOn:[shadowJar]) {
+    injars jar
+    outjars "$buildDir/libs/${project.name}-${version}-shrunk.jar"
+    libraryjars "${System.getProperty('java.home')}/lib/rt.jar"
+
+    keep "class Capsule { *; }"
+    keep "class ShieldedCapsule { *; }"
+    keeppackagenames "co.paralleluniverse.capsule"
+
+    dontoptimize
+    dontobfuscate
+    dontwarn
+
+    doLast {
+        logger.info("$buildDir/libs/${project.name}-${project.version}-shrunk.jar -> $buildDir/libs/${project.name}-${project.version}.jar")
+        def out = file("$buildDir/libs/${project.name}-${project.version}.jar")
+        if (out.exists())
+            out.delete()
+        file("$buildDir/libs/${project.name}-${version}-shrunk.jar").renameTo(out)
     }
 }
 
@@ -129,3 +172,19 @@ uploadArchives {
         }
     }
 }
+
+[assemble, build, install, signArchives, uploadArchives]*.dependsOn proguard
+
+install.repositories.mavenInstaller {
+    pom.whenConfigured {
+        it.dependencies.clear()
+    }
+}
+
+uploadArchives.repositories.mavenDeployer {
+    pom.whenConfigured {
+        it.dependencies.clear()
+    }
+}
+
+defaultTasks 'build'
