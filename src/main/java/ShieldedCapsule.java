@@ -306,10 +306,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 					try {
 						s = snss.accept();
 					} catch (final IOException t) {
-						// TODO understand
-						// `ShieldedCapsule.super.log()` seems to generate accessors that are needed to successfully perform the call.
-						// Any of `log`, `ShieldedCapsule.log`, `Capsule.log`, `ShieldedCapsule.this.log` performs a direct call which
-						// results in an `IllegalAccessError`.
+						// In the "embedded caplet" setup the `Capsule` and `ShieldedCapsule` classloaders are different:
+						// - http://stackoverflow.com/questions/3386662/illegalaccesserror-accessing-a-protected-method
+						// - http://stackoverflow.com/questions/14070215/java-lang-illegalaccesserror-tried-to-access-field-concreteentity-instance-from
+						// TODO understand why `ShieldedCapsule.super.log` works
 						ShieldedCapsule.super.log(LOG_QUIET, "Couldn't accept Log4J SocketNode connections: " + t.getMessage());
 						ShieldedCapsule.super.log(LOG_QUIET, t);
 					}
@@ -332,7 +332,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	protected final void agent(Instrumentation inst) {
 		// setLinkNameService(); // must be done before call to super
 		try {
-			redirectJUL();
+			redirectJUL(); // must be done before call to super
 			redirectLog4j(); // must be done before call to super
 		} catch (final Exception e) {
 			throw new RuntimeException(e);
