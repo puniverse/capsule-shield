@@ -17,12 +17,10 @@ targetCompatibility = '1.7'
 
 [compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
 
-mainClassName = 'Capsule'
-
-group       = "co.paralleluniverse"
-version     = "0.2.0-SNAPSHOT"
-status      = "integration"
-description = "Container Caplet"
+group               = "co.paralleluniverse"
+version             = "0.2.0-SNAPSHOT"
+status              = "integration"
+description         = "Container Caplet"
 ext.url             = "http://puniverse.github.com/quasar"
 ext.vendor          = "Parallel Universe Software Co."
 ext.licenseName     = "Eclipse Public License - v 1.0"
@@ -32,7 +30,15 @@ ext.scmConnection   = "https://github.com/puniverse/${project.name}.git"
 ext.distDir         = "$buildDir/dist"
 ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
 
+ext.capsule = 'Capsule'
+ext.caplet  = 'ShieldedCapsule'
+
+ext.capsuleVer = '1.0.1-SNAPSHOT'
+ext.log4jVer   = '1.2.17'
+ext.slf4jVer   = '1.7.12'
+
 if (!project.hasProperty("sonatypeUsername") || !project.hasProperty("sonatypePassword")) {
+    println "sonatype username or password not set"
     ext.sonatypeUsername = ""
     ext.sonatypePassword = ""
 }
@@ -42,6 +48,12 @@ repositories {
     mavenCentral()
     maven {
         url "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
+}
+
+configurations {
+    [compile, runtime]*.resolutionStrategy {
+        failOnVersionConflict()
     }
 }
 
@@ -56,10 +68,11 @@ sourceSets {
 }
 
 dependencies {
-    compile 'co.paralleluniverse:capsule:1.0.1-SNAPSHOT'
-    compile 'co.paralleluniverse:capsule-util:1.0.1-SNAPSHOT'
-    compile 'log4j:log4j:1.2.17'
-    provided 'org.slf4j:jul-to-slf4j:1.7.12'
+    compile "$group:capsule:$capsuleVer"
+    compile "$group:capsule-util:$capsuleVer"
+    compile "log4j:log4j:$log4jVer"
+
+    provided "org.slf4j:jul-to-slf4j:$slf4jVer"
 }
 
 shadowJar {
@@ -76,9 +89,9 @@ shadowJar {
 
     manifest {
         attributes (
-            'Premain-Class' : mainClassName,
-            'Main-Class'    : mainClassName,
-            'Caplets'       : 'ShieldedCapsule'
+            'Premain-Class' : capsule,
+            'Main-Class'    : capsule,
+            'Caplets'       : caplet
         )
     }
 }
@@ -89,7 +102,7 @@ task proguard(type: proguard.gradle.ProGuardTask, dependsOn:[shadowJar]) {
     libraryjars "${System.getProperty('java.home')}/lib/rt.jar"
 
     keep "class Capsule { *; }"
-    keep "class ShieldedCapsule { *; }"
+    keep "class ${caplet} { *; }"
     keeppackagenames "co.paralleluniverse.capsule"
 
     dontoptimize
@@ -157,6 +170,10 @@ uploadArchives {
                     developer {
                         id 'pron'
                         name 'Ron Pressler'
+                    }
+                    developer {
+                        id 'circlespainter'
+                        name 'Fabio Tudone'
                     }
                 }
             }
