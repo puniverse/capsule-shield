@@ -52,8 +52,6 @@ configurations {
 sourceSets {
     main {
         compileClasspath += configurations.provided
-        test.compileClasspath += configurations.provided
-        test.runtimeClasspath += configurations.provided
     }
 }
 
@@ -62,7 +60,6 @@ dependencies {
     compile 'co.paralleluniverse:capsule-util:1.0.1-SNAPSHOT'
     compile 'log4j:log4j:1.2.17'
     provided 'org.slf4j:jul-to-slf4j:1.7.12'
-    testCompile group: 'junit', name: 'junit', version: '4.12'
 }
 
 shadowJar {
