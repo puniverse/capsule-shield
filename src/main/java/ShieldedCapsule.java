@@ -73,9 +73,10 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String PROP_JAVA_VERSION = "java.version";
 	private static final String PROP_JAVA_HOME = "java.home";
 	private static final String PROP_OS_NAME = "os.name";
+
 	// private static final String PROP_DOMAIN = "sun.net.spi.nameservice.domain";
 	// private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
-	// private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
+	private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
 
 	private static final String CONTAINER_NET_IFACE_NAME = "eth0";
 	private static final String CONTAINER_NAME = "lxc";
@@ -330,7 +331,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//////////////////////////// CAPSULE AGENT //////////////////////////////
 	@Override
 	protected final void agent(Instrumentation inst) {
-		// setLinkNameService(); // must be done before call to super
+		setupLinkNameService(); // must be done before call to super
 		try {
 			redirectJUL(); // must be done before call to super
 			redirectLog4j(); // must be done before call to super
@@ -949,19 +950,25 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//<editor-fold defaultstate="collapsed" desc="LXC Container NameService">
 	/////////// NameService ///////////////////////////////////
 
-	/*
-	private static void setLinkNameService() {
-		String newv = "dns,shield";
-		for (int i = 1; ; i++) {
-			final String prop = PROP_PREFIX_NAMESERVICE + i;
-			final String oldv = System.getProperty(prop);
-			System.setProperty(prop, newv);
-			if (oldv == null || oldv.isEmpty())
+	private static void setupLinkNameService() {
+		// Find the lowest priority provider idx
+		int lastProviderIdx = -1;
+		for (int i = 1 ; ; i++) {
+			final String v = System.getProperty(PROP_PREFIX_NAMESERVICE + i);
+			if (v == null || v.isEmpty())
 				break;
-			newv = oldv;
+			lastProviderIdx = i;
 		}
+
+		// Shift down existing providers, if any
+		for (int i = lastProviderIdx ; i > 0 ; i--) {
+			final String v = System.getProperty(PROP_PREFIX_NAMESERVICE + i);
+			System.setProperty(PROP_PREFIX_NAMESERVICE + i + 1, v);
+		}
+
+		// Add shield resolution as a top-proprity provider
+		System.setProperty(PROP_PREFIX_NAMESERVICE + 1, "dns,shield");
 	}
-	*/
 
 	/**
 	 * Look up all hosts by name.
