@@ -1,0 +1,10 @@
+language: java
+sudo: false
+install: gradle -q assemble
+script: gradle -i check
+jdk:
+  - oraclejdk7
+  - oraclejdk8
+
+notifications:
+  slack: puniverse:OsnbakHrYeTcLyalVgtUeI4F
