@@ -240,12 +240,12 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			final List<Object> lookupRes = new ArrayList<>(8);
 			if (ATTR_APP_CLASS_PATH.getKey().equals(attrContext.getKey()) && !includedBasicLoggingRedirectorsForClassPath ||
 				ATTR_DEPENDENCIES.getKey().equals(attrContext.getKey()) && !includedBasicLoggingRedirectorsForDeps) {
+				log(LOG_VERBOSE, "Including Log4J " + getProperty(OPT_LOG4J_VER) + ", context " + attrContext.getKey());
+				lookupRes.add(super.lookup0("log4j:log4j:" + getProperty(OPT_LOG4J_VER), type, attrContext, context));
+				log(LOG_VERBOSE, "Setting up SLF4J -> Log4J implementation, context " + attrContext.getKey());
+				lookupRes.add(super.lookup0("org.slf4j:slf4j-log4j12:" + getProperty(OPT_SLF4J_VER), type, attrContext, context));
 				log(LOG_VERBOSE, "Setting up JUL redirection -> SLF4J (-> Log4J), context " + attrContext.getKey());
 				lookupRes.add(super.lookup0("org.slf4j:jul-to-slf4j:" + getProperty(OPT_SLF4J_VER), type, attrContext, context));
-				log(LOG_VERBOSE, "Setting up JCL redirection -> SLF4J (-> Log4J), context " + attrContext.getKey());
-				lookupRes.add(super.lookup0("org.slf4j:slf4j-log4j12:" + getProperty(OPT_SLF4J_VER), type, attrContext, context));
-				log(LOG_VERBOSE, "Setting up JCL redirection -> SLF4J (-> Log4J), context " + attrContext.getKey());
-				lookupRes.add(super.lookup0("log4j:log4j:" + getProperty(OPT_LOG4J_VER), type, attrContext, context));
 
 				if (ATTR_APP_CLASS_PATH.getKey().equals(attrContext.getKey()))
 					includedBasicLoggingRedirectorsForClassPath = true;
