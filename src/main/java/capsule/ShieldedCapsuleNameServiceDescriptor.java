@@ -5,7 +5,7 @@
 * of the Eclipse Public License v1.0, available at
 * http://www.eclipse.org/legal/epl-v10.html
 */
-package co.paralleluniverse.capsule.shield;
+package capsule;
 
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.InvocationTargetException;
