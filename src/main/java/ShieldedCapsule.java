@@ -89,64 +89,53 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//</editor-fold>
 
 	//<editor-fold defaultstate="collapsed" desc="Configuration">
-	private static final String OPT_SLF4J_VER = OPTION("capsule.shield.redirectLog4j.slf4jVer", "1.7.12", null, false, "The SLF4J version that will be used as a bridge to Log4J when redirecting application logs");
-	private static final String OPT_LOG4J2_VER = OPTION("capsule.shield.redirectLog4j.log4j2Ver", "2.4", null, false, "The Log4J2 version that will be used as a bridge to SLF4J when redirecting application logs");
-	private static final String OPT_LOG4J_VER = OPTION("capsule.shield.redirectLog4j.log4jVer", "1.2.17", null, false, "The Log4J version that will be used when redirecting application logs");
 	private static final String OPT_REDIRECT_LOG = OPTION("capsule.redirectLog", "true", null, false, "Whether logging events should be redirected to the capsule process");
 
-	private static final String OPT_LXC_DESTROY_ONLY = OPTION("capsule.shield.lxc.destroyOnly", "false", null, false, "Whether the container should be only destroyed without booting it afterwards");
+	private static final String OPT_DESTROY_ONLY = OPTION("capsule.destroyOnly", "false", null, false, "Whether the container should be only destroyed without booting it afterwards");
 
-	private static final String OPT_LXC_UID_MAP_START = OPTION("capsule.shield.lxc.unprivileged.uidMapStart", "100000", null, false, "The first user ID in an unprivileged container");
-	private static final String OPT_LXC_GID_MAP_START = OPTION("capsule.shield.lxc.unprivileged.gidMapStart", "100000", null, false, "The first group ID in an unprivileged container");
-	private static final String OPT_LXC_UID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.uidMapSize", "65536", null, false, "The size of the consecutive user ID map in an unprivileged container");
-	private static final String OPT_LXC_GID_MAP_SIZE = OPTION("capsule.shield.lxc.unprivileged.gidMapSize", "65536", null, false, "The size of the consecutive group ID map in an unprivileged container");
-	private static final String OPT_LXC_PRIVILEGED = OPTION("capsule.shield.lxc.privileged", "false", null, false, "Whether the container should be privileged");
-	private static final String OPT_LXC_SYSSHAREDIR = OPTION("capsule.shield.lxc.sysShareDir", "/usr/share/lxc", null, false, "The location of the LXC toolchain's system-wide `share` directory");
-	private static final String OPT_JMX = OPTION("capsule.shield.jmx", "true", null, false, "Whether JMX will be proxied from the capsule parent process to the container");
+	private static final String OPT_UID_MAP_START = OPTION("capsule.uidMapStart", "100000", null, false, "The first user ID in an unprivileged container");
+	private static final String OPT_GID_MAP_START = OPTION("capsule.gidMapStart", "100000", null, false, "The first group ID in an unprivileged container");
+	private static final String OPT_UID_MAP_SIZE = OPTION("capsule.uidMapSize", "65536", null, false, "The size of the consecutive user ID map in an unprivileged container");
+	private static final String OPT_GID_MAP_SIZE = OPTION("capsule.gidMapSize", "65536", null, false, "The size of the consecutive group ID map in an unprivileged container");
+	private static final String OPT_PRIVILEGED = OPTION("capsule.privileged", "false", null, false, "Whether the container should be privileged");
+	private static final String OPT_SYSSHAREDIR = OPTION("capsule.sysShareDir", "/usr/share", null, false, "The location of the system-wide `share` directory where container toolchains can be found");
+	private static final String OPT_JMX = OPTION("capsule.jmx", "true", null, false, "Whether JMX will be proxied from the capsule parent process to the container");
 
 	private static final String OPT_PREFIX_LINK_IP = OPTION("capsule.internal.link.ip.", null, null, false, "INTERNAL USE ONLY: a `capsule.internal.link.ip.<hostname>=<IP>` option will create an <hostname> DNS entry towards <IP>");
 	private static final String OPT_PREFIX_LINK_ID = OPTION("capsule.link.", null, null, false, "A `capsule.link.<hostname>=<ID>` option will create an <hostname> DNS entry towards a shield container <ID>");
 
-	private static final String LXC_NETWORKING_TYPE_DESC = "The LXC networking type to be configured";
-	private static final String OPT_LXC_NETWORKING_TYPE = OPTION("capsule.shield.lxc.networkingType", null, null, false, LXC_NETWORKING_TYPE_DESC);
-	private static final Entry<String, String> ATTR_LXC_NETWORKING_TYPE = ATTRIBUTE("LXC-Networking-Type", T_STRING(), "veth", true, LXC_NETWORKING_TYPE_DESC);
+	private static final String NETWORK_BRIDGE_DESC = "The name of the host bridge adapter for LXC networking";
+	private static final String OPT_NETWORK_BRIDGE = OPTION("capsule.networkBridge", null, null, false, NETWORK_BRIDGE_DESC);
+	private static final Entry<String, String> ATTR_NETWORK_BRIDGE = ATTRIBUTE("Network-Bridge", T_STRING(), "lxcbr0", true, NETWORK_BRIDGE_DESC);
 
-	private static final String LXC_NETWORK_BRIDGE_DESC = "The name of the host bridge adapter for LXC networking";
-	private static final String OPT_LXC_NETWORK_BRIDGE = OPTION("capsule.shield.lxc.networkBridge", null, null, false, LXC_NETWORK_BRIDGE_DESC);
-	private static final Entry<String, String> ATTR_LXC_NETWORK_BRIDGE = ATTRIBUTE("LXC-Network-Bridge", T_STRING(), "lxcbr0", true, LXC_NETWORK_BRIDGE_DESC);
-
-	private static final String STATIC_IP_DESC = "An optional static IP to be assigned to the container (the default is using DHCP)";
-	private static final String OPT_STATIC_IP = OPTION("capsule.shield.staticIP", null, null, false, STATIC_IP_DESC);
-	private static final Entry<String, String> ATTR_STATIC_IP = ATTRIBUTE("Static-IP", T_STRING(), null, true, STATIC_IP_DESC);
+	private static final String IP_DESC = "An optional static IP to be assigned to the container (the default is using DHCP)";
+	private static final String OPT_IP = OPTION("capsule.ip", null, null, false, IP_DESC);
+	private static final Entry<String, String> ATTR_IP = ATTRIBUTE("IP", T_STRING(), null, true, IP_DESC);
 
 	private static final String SET_DEFAULT_GW_DESC = "Whether the default gateway should be set in order to grant internet access to the container";
-	private static final String OPT_SET_DEFAULT_GW = OPTION("capsule.shield.setDefaultGW", null, null, false, SET_DEFAULT_GW_DESC);
+	private static final String OPT_SET_DEFAULT_GW = OPTION("capsule.setDefaultGW", null, null, false, SET_DEFAULT_GW_DESC);
 	private static final Entry<String, Boolean> ATTR_SET_DEFAULT_GW = ATTRIBUTE("Set-Default-Gateway", T_BOOL(), true, true, SET_DEFAULT_GW_DESC);
 
-	private static final String LXC_ALLOW_TTY_DESC = "whether the console device will be enabled in the container";
-	private static final String OPT_LXC_ALLOW_TTY = OPTION("capsule.shield.lxc.allowTTY", null, null, false, LXC_ALLOW_TTY_DESC);
-	private static final Entry<String, Boolean> ATTR_LXC_ALLOW_TTY = ATTRIBUTE("LXC-Allow-TTY", T_BOOL(), false, true, LXC_ALLOW_TTY_DESC);
-
 	private static final String ID_DESC = "An optional shield ID (defaults to the capsule app ID)";
-	private static final String OPT_ID = OPTION("capsule.shield.id", null, null, false, ID_DESC);
-	private static final Entry<String, String> ATTR_ID = ATTRIBUTE("Shield-ID", T_STRING(), null, true, ID_DESC);
+	private static final String OPT_ID = OPTION("capsule.id", null, null, false, ID_DESC);
+	private static final Entry<String, String> ATTR_ID = ATTRIBUTE("ID", T_STRING(), null, true, ID_DESC);
 
 	private static final String HOSTNAME_DESC = "The internal host name assigned to the container";
-	private static final String OPT_HOSTNAME = OPTION("capsule.shield.hostname", null, null, false, HOSTNAME_DESC);
+	private static final String OPT_HOSTNAME = OPTION("capsule.hostname", null, null, false, HOSTNAME_DESC);
 	private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, HOSTNAME_DESC);
 
 	private static final String ALLOWED_DEVICES_DESC = "a list of additional allowed devices in an unprivileged container (example: `\"c 136:* rwm\" \"\"`";
-	private static final String OPT_ALLOWED_DEVICES = OPTION("capsule.shield.allowedDevices", null, null, false, ALLOWED_DEVICES_DESC);
+	private static final String OPT_ALLOWED_DEVICES = OPTION("capsule.allowedDevices", null, null, false, ALLOWED_DEVICES_DESC);
 	private static final Entry<String, List<String>> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_LIST(T_STRING()), null, true, ALLOWED_DEVICES_DESC);
 
 	private static final String CPU_SHARES_DESC = "`cgroup` CPU shares";
-	private static final String OPT_CPU_SHARES = OPTION("capsule.shield.cpuShares", null, null, false, CPU_SHARES_DESC);
+	private static final String OPT_CPU_SHARES = OPTION("capsule.cpuShares", null, null, false, CPU_SHARES_DESC);
 	private static final Entry<String, Long> ATTR_CPU_SHARES = ATTRIBUTE("CPU-Shares", T_LONG(), null, true, CPU_SHARES_DESC);
 
-	private static final String MEM_SHARES_DESC = "`cgroup` memory shares";
-	private static final String OPT_MEMORY_LIMIT = OPTION("capsule.shield.memoryLimit", null, null, false, MEM_SHARES_DESC);
+	private static final String MEM_SHARES_DESC = "`cgroup` memory limit";
+	private static final String OPT_MEMORY_LIMIT = OPTION("capsule.memoryLimit", null, null, false, MEM_SHARES_DESC);
 	private static final Entry<String, Long> ATTR_MEMORY_LIMIT = ATTRIBUTE("Memory-Limit", T_LONG(), null, true, MEM_SHARES_DESC);
-	private static final String PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE = "capsule.shield.internal.socketNode";
+	private static final String PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE = "capsule.internal.socketNode";
 	//</editor-fold>
 
 	private static String distroType;
@@ -179,7 +168,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		localRepo = getLocalRepo();
 
 		try {
-			if (emptyOrTrue(getProperty(OPT_LXC_DESTROY_ONLY))) {
+			if (emptyOrTrue(getProperty(OPT_DESTROY_ONLY))) {
 				destroyContainer();
 				if (Files.exists(getShieldContainersAppDir()) && getShieldContainersAppDir().toFile().list().length == 0)
 					Files.delete(getShieldContainersAppDir());
@@ -225,7 +214,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 			setupLog4j2TcpSocketServer();
 			List<String> l = (List<String>) attr.getValue();
 			if (l == null) l = new ArrayList<>();
-			l.add("-Dlog4j.defaultInitOverride=true");
+			l.add("-Duser.home=/");
 			try {
 				l.add("-D" + PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE + "=" + getVNetHostIPv4().getHostAddress() + ":" + log4j2TcpSocketServerPort);
 			} catch (final SocketException e) {
@@ -583,7 +572,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	}
 
 	private String getNetworked() throws SocketException {
-		final String staticIP = getOptionOrAttributeString(OPT_STATIC_IP, ATTR_STATIC_IP);
+		final String staticIP = getOptionOrAttributeString(OPT_IP, ATTR_IP);
 		return (
 			"#!/bin/bash\n" +
 			"\n" +
@@ -646,15 +635,15 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private void chownRootFS() throws IOException, InterruptedException {
 		final Long uidMapStart;
 		try {
-			uidMapStart = Long.parseLong(getProperty(OPT_LXC_UID_MAP_START));
+			uidMapStart = Long.parseLong(getProperty(OPT_UID_MAP_START));
 		} catch (final Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_LXC_UID_MAP_START + " with value " + getProperty(OPT_LXC_UID_MAP_START) + " into a Long value", t);
+			throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_START + " with value " + getProperty(OPT_UID_MAP_START) + " into a Long value", t);
 		}
 		final Long gidMapStart;
 		try {
-			gidMapStart = Long.parseLong(getProperty(OPT_LXC_GID_MAP_START));
+			gidMapStart = Long.parseLong(getProperty(OPT_GID_MAP_START));
 		} catch (final Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_LXC_GID_MAP_START + "with value " + getProperty(OPT_LXC_GID_MAP_START) + " into a Long value", t);
+			throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_START + "with value " + getProperty(OPT_GID_MAP_START) + " into a Long value", t);
 		}
 
 		final Long currentUID = getCurrentUID();
@@ -678,38 +667,36 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	private String getConf() throws IOException {
 		final StringBuilder sb = new StringBuilder();
-		final String lxcConfig = getProperty(OPT_LXC_SYSSHAREDIR) + SEP + "config";
+		final String lxcConfig = getProperty(OPT_SYSSHAREDIR) + SEP + CONTAINER_NAME + SEP + "config";
 		boolean privileged = false;
 		try {
-			privileged = Boolean.parseBoolean(getProperty(OPT_LXC_PRIVILEGED));
+			privileged = Boolean.parseBoolean(getProperty(OPT_PRIVILEGED));
 		} catch (final Throwable ignored) {}
-		final String networkType = getOptionOrAttributeString(OPT_LXC_NETWORKING_TYPE, ATTR_LXC_NETWORKING_TYPE);
-		final String networkBridge = getOptionOrAttributeString(OPT_LXC_NETWORK_BRIDGE, ATTR_LXC_NETWORK_BRIDGE);
-		boolean tty = getOptionOrAttributeBool(OPT_LXC_ALLOW_TTY, ATTR_LXC_ALLOW_TTY);
+		final String networkBridge = getOptionOrAttributeString(OPT_NETWORK_BRIDGE, ATTR_NETWORK_BRIDGE);
 		final String hostname = getOptionOrAttributeString(OPT_HOSTNAME, ATTR_HOSTNAME);
 		final Long uidMapStart;
 		try {
-			uidMapStart = Long.parseLong(getProperty(OPT_LXC_UID_MAP_START));
+			uidMapStart = Long.parseLong(getProperty(OPT_UID_MAP_START));
 		} catch (final Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_LXC_UID_MAP_START + "with value " + getProperty(OPT_LXC_UID_MAP_START) + "  into a Long value", t);
+			throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_START + "with value " + getProperty(OPT_UID_MAP_START) + "  into a Long value", t);
 		}
 		final Long gidMapStart;
 		try {
-			gidMapStart = Long.parseLong(getProperty(OPT_LXC_GID_MAP_START));
+			gidMapStart = Long.parseLong(getProperty(OPT_GID_MAP_START));
 		} catch (final Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_LXC_GID_MAP_START + "with value " + getProperty(OPT_LXC_GID_MAP_START) + "  into a Long value", t);
+			throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_START + "with value " + getProperty(OPT_GID_MAP_START) + "  into a Long value", t);
 		}
 		final Long sizeUidMap;
 		try {
-			sizeUidMap = Long.parseLong(getProperty(OPT_LXC_UID_MAP_SIZE));
+			sizeUidMap = Long.parseLong(getProperty(OPT_UID_MAP_SIZE));
 		} catch (final Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_LXC_UID_MAP_SIZE + "with value " + getProperty(OPT_LXC_UID_MAP_SIZE) + " into a Long value", t);
+			throw new RuntimeException("Cannot parse option " + OPT_UID_MAP_SIZE + "with value " + getProperty(OPT_UID_MAP_SIZE) + " into a Long value", t);
 		}
 		final Long sizeGidMap;
 		try {
-			sizeGidMap = Long.parseLong(getProperty(OPT_LXC_GID_MAP_SIZE));
+			sizeGidMap = Long.parseLong(getProperty(OPT_GID_MAP_SIZE));
 		} catch (final Throwable t) {
-			throw new RuntimeException("Cannot parse option " + OPT_LXC_GID_MAP_SIZE + "with value " + getProperty(OPT_LXC_GID_MAP_SIZE) + " into a Long value", t);
+			throw new RuntimeException("Cannot parse option " + OPT_GID_MAP_SIZE + "with value " + getProperty(OPT_GID_MAP_SIZE) + " into a Long value", t);
 		}
 
 		// System mounts
@@ -759,26 +746,19 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		sb.append("\n## Console\n")
 			.append("lxc.console = none\n") // disable the main console
 			.append("lxc.pts = 1024\n")     // use a dedicated pts for the container (and limit the number of pseudo terminal available)
-			.append("lxc.tty = 1\n");       // no controlling tty at all
-		if (tty)
-			sb.append("lxc.mount.entry = dev").append(SEP).append("console ").append(SEP).append("dev").append(SEP).append("console none bind,rw 0 0\n");
+			.append("lxc.tty = 1\n")       // no controlling tty at all
+			.append("lxc.mount.entry = dev").append(SEP).append("console ").append(SEP).append("dev").append(SEP).append("console none bind,rw 0 0\n");
 
 		// hostname
 		sb.append("\n## Hostname\n")
 			.append("lxc.utsname = ").append(hostname != null ? hostname : getAppId()).append("\n");
 
 		// Network config
-		sb.append("\n## Network\n");
-		if ("veth".equals(networkType))
-			sb.append("lxc.network.type = veth\n")
-				.append("lxc.network.flags = up\n")
-				.append("lxc.network.link = ").append(networkBridge).append("\n")
-				.append("lxc.network.name = ").append(CONTAINER_NET_IFACE_NAME).append("\n");
-		else if ("host".equals(networkType))
-			sb.append("lxc.network.type = none");
-		else
-			sb.append("lxc.network.type = empty\n")
-				.append("lxc.network.flags = up\n");
+		sb.append("\n## Network\n")
+			.append("lxc.network.type = veth\n")
+			.append("lxc.network.flags = up\n")
+			.append("lxc.network.link = ").append(networkBridge).append("\n")
+			.append("lxc.network.name = ").append(CONTAINER_NET_IFACE_NAME).append("\n");
 
 		// Perms
 		sb.append("\n## Perms\n");
@@ -1130,7 +1110,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private Inet4Address getVNetHostIPv4() throws SocketException {
 		// TODO IPv6
 		if (vnetHostIPv4 == null) {
-			final Enumeration<InetAddress> vas = NetworkInterface.getByName(getAttribute(ATTR_LXC_NETWORK_BRIDGE)).getInetAddresses();
+			final Enumeration<InetAddress> vas = NetworkInterface.getByName(getAttribute(ATTR_NETWORK_BRIDGE)).getInetAddresses();
 			while (vas.hasMoreElements()) {
 				final InetAddress ia = vas.nextElement();
 				if (ia instanceof Inet4Address)
