@@ -82,10 +82,12 @@ shadowJar {
     classifier = '' // overwrite jar
     destinationDir = file("$buildDir/libs")
 
-    exclude 'META-INF/**'
+    exclude 'META-INF/LICENSE'
+    exclude 'META-INF/NOTICE'
+    exclude 'META-INF/maven/**'
     exclude 'org/apache/log4j/xml/log4j.dtd'
 
-    relocate 'org.', 'capsule.org.'
+    // relocate 'org.', 'capsule.org.' // Unfortunately log4j can't be relocated
 
     manifest {
         attributes (
@@ -103,7 +105,9 @@ task proguard(type: proguard.gradle.ProGuardTask, dependsOn:[shadowJar]) {
 
     keep "class Capsule { *; }"
     keep "class ${caplet} { *; }"
-    keeppackagenames "co.paralleluniverse.capsule"
+    keep "class co.paralleluniverse.capsule.shield.** { *; }"
+    keep "class org.apache.log4j.** { *; }"
+    keep "interface org.apache.log4j.** { *; }"
 
     dontoptimize
     dontobfuscate
