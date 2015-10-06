@@ -1,15 +1,7 @@
-buildscript {
-    dependencies {
-        classpath 'net.sf.proguard:proguard-gradle:5.0'
-    }
-}
-
 plugins {
     id 'java'
-    id 'com.github.johnrengelman.shadow' version '1.2.1'
     id 'maven'
     id 'signing'
-    // id 'net.sf.proguard.proguard-gradle' version '5.0'
 }
 
 sourceCompatibility = '1.7'
@@ -33,9 +25,9 @@ ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
 ext.capsule = 'Capsule'
 ext.caplet  = 'ShieldedCapsule'
 
-ext.capsuleVer = '1.0.1-SNAPSHOT'
-ext.log4jVer   = '1.2.17'
-ext.slf4jVer   = '1.7.12'
+ext.capsuleVer        = '1.0.1-SNAPSHOT'
+ext.log4j2Ver         = '2.4'
+ext.slf4jVer          = '1.7.12'
 
 if (!project.hasProperty("sonatypeUsername") || !project.hasProperty("sonatypePassword")) {
     println "sonatype username or password not set"
@@ -70,55 +62,25 @@ sourceSets {
 dependencies {
     compile "$group:capsule:$capsuleVer"
     compile "$group:capsule-util:$capsuleVer"
-    compile "log4j:log4j:$log4jVer"
 
-    provided "org.slf4j:jul-to-slf4j:$slf4jVer"
+    compile "org.apache.logging.log4j:log4j-api:$log4j2Ver"
+    compile "org.apache.logging.log4j:log4j-web:$log4j2Ver"
+
+    compile "org.apache.logging.log4j:log4j-slf4j-impl:$log4j2Ver"         // SLF4J   -> Log4J2
+    compile "org.slf4j:jul-to-slf4j:$slf4jVer"                             // JUL     -> SLF4J (-> Log4J2)
+
+    runtime "org.slf4j:jcl-over-slf4j:$slf4jVer"                           // JCL     -> SLF4J (-> Log4J2)
+    runtime "org.slf4j:log4j-over-slf4j:$slf4jVer"                         // Log4J12 -> SLF4J (-> Log4J2)
 }
 
-shadowJar {
-    outputs.upToDateWhen { false }
-
-    // artifactAttached = false
-    classifier = '' // overwrite jar
-    destinationDir = file("$buildDir/libs")
-
-    exclude 'META-INF/LICENSE'
-    exclude 'META-INF/NOTICE'
-    exclude 'META-INF/maven/**'
-    exclude 'org/apache/log4j/xml/log4j.dtd'
-
-    // relocate 'org.', 'capsule.org.' // Unfortunately log4j can't be relocated
-
+jar {
+    from { configurations.runtime.collect { zipTree(it) } }
     manifest {
         attributes (
             'Premain-Class' : capsule,
             'Main-Class'    : capsule,
             'Caplets'       : caplet
         )
-    }
-}
-
-task proguard(type: proguard.gradle.ProGuardTask, dependsOn:[shadowJar]) {
-    injars jar
-    outjars "$buildDir/libs/${project.name}-${version}-shrunk.jar"
-    libraryjars "${System.getProperty('java.home')}/lib/rt.jar"
-
-    keep "class Capsule { *; }"
-    keep "class ${caplet} { *; }"
-    keep "class co.paralleluniverse.capsule.shield.** { *; }"
-    keep "class org.apache.log4j.** { *; }"
-    keep "interface org.apache.log4j.** { *; }"
-
-    dontoptimize
-    dontobfuscate
-    dontwarn
-
-    doLast {
-        logger.info("$buildDir/libs/${project.name}-${project.version}-shrunk.jar -> $buildDir/libs/${project.name}-${project.version}.jar")
-        def out = file("$buildDir/libs/${project.name}-${project.version}.jar")
-        if (out.exists())
-            out.delete()
-        file("$buildDir/libs/${project.name}-${version}-shrunk.jar").renameTo(out)
     }
 }
 
@@ -184,8 +146,6 @@ uploadArchives {
         }
     }
 }
-
-[assemble, build, install, signArchives, uploadArchives]*.dependsOn proguard
 
 install.repositories.mavenInstaller {
     pom.whenConfigured {

@@ -13,3 +13,4 @@ build/
 .gradle/
 .nb-gradle-properties
 .vagrant/
+/src/main/resources/log4j2-test.xml
