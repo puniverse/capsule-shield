@@ -295,6 +295,17 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 	}
 
+	// In the "embedded caplet" setup the `Capsule` and `ShieldedCapsule` classloaders are different:
+	// - http://stackoverflow.com/questions/3386662/illegalaccesserror-accessing-a-protected-method
+	// - http://stackoverflow.com/questions/14070215/java-lang-illegalaccesserror-tried-to-access-field-concreteentity-instance-from
+	protected static void log0(int level, String str) {
+		log(level, str);
+	}
+
+	protected static void log0(int level, Throwable t) {
+		log(level, t);
+	}
+
 	private void startSocketNode() throws SocketException {
 		log(LOG_VERBOSE, "Starting Log4J SocketNode");
 		new Thread(new Runnable() {
@@ -306,20 +317,16 @@ public class ShieldedCapsule extends Capsule implements NameService {
 					try {
 						s = snss.accept();
 					} catch (final IOException t) {
-						// In the "embedded caplet" setup the `Capsule` and `ShieldedCapsule` classloaders are different:
-						// - http://stackoverflow.com/questions/3386662/illegalaccesserror-accessing-a-protected-method
-						// - http://stackoverflow.com/questions/14070215/java-lang-illegalaccesserror-tried-to-access-field-concreteentity-instance-from
-						// TODO understand why `ShieldedCapsule.super.log` works
-						ShieldedCapsule.super.log(LOG_QUIET, "Couldn't accept Log4J SocketNode connections: " + t.getMessage());
-						ShieldedCapsule.super.log(LOG_QUIET, t);
+						log0(LOG_QUIET, "Couldn't accept Log4J SocketNode connections: " + t.getMessage());
+						log0(LOG_QUIET, t);
 					}
 					if (s != null) {
 						try {
-							ShieldedCapsule.super.log(LOG_VERBOSE, "Agent connected to Log4J SocketNode");
+							log0(LOG_VERBOSE, "Agent connected to Log4J SocketNode");
 							new SocketNode(s, LogManager.getLoggerRepository()).run();
 						} catch (final Throwable t) {
-							ShieldedCapsule.super.log(LOG_QUIET, "Log4J SocketNode interrupted: " + t.getMessage());
-							ShieldedCapsule.super.log(LOG_QUIET, t);
+							log0(LOG_QUIET, "Log4J SocketNode interrupted: " + t.getMessage());
+							log0(LOG_QUIET, t);
 						}
 					}
 				}
