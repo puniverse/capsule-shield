@@ -16,7 +16,6 @@ import sun.net.spi.nameservice.NameService;
 import javax.management.remote.JMXServiceURL;
 import javax.management.remote.rmi.RMIConnectorServer;
 import javax.net.ServerSocketFactory;
-import javax.rmi.ssl.SslRMIServerSocketFactory;
 import java.io.*;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
@@ -35,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author pron
  * @author circlespainter
  */
-public class ShieldedCapsule extends Capsule implements NameService, ShieldedCapsuleAPI {
+public class ShieldedCapsule extends Capsule implements NameService, RMIServerSocketFactory, ShieldedCapsuleAPI {
 	/*
      * See:
      *
@@ -131,15 +130,15 @@ public class ShieldedCapsule extends Capsule implements NameService, ShieldedCap
 
 	private static Path hostAbsoluteOwnJarFile;
 
+	private static Path hostAbsoluteOwnJarFile;
 	private static Path localRepo;
-
 	private static Inet4Address vnetHostIPv4;
 	private static Inet4Address vnetContainerIPv4;
 	private static int log4j2TcpSocketServerPort;
 	private static Map<String, InetAddress[]> hostnameToInets = new ConcurrentHashMap<>();
 	private static Map<byte[], String> ipToHostname = new ConcurrentHashMap<>();
 
-	private LXC lxc;
+	private static LXC lxc;
 
 	public ShieldedCapsule(Capsule pred) {
 		super(pred);
@@ -431,19 +430,10 @@ public class ShieldedCapsule extends Capsule implements NameService, ShieldedCap
 		return super.attribute(attr);
 	}
 
-	private static class RMIServerSocketFactoryImpl extends SslRMIServerSocketFactory {
-		private final InetAddress localAddress;
-
-		public RMIServerSocketFactoryImpl(InetAddress pAddress) {
-			super(null, null, true);
-			localAddress = pAddress;
-		}
-
-		@Override
-		@SuppressWarnings("NullableProblems")
-		public ServerSocket createServerSocket(int pPort) throws IOException  {
-			return ServerSocketFactory.getDefault().createServerSocket(pPort, 0, localAddress);
-		}
+	@Override
+	@SuppressWarnings("NullableProblems")
+	public ServerSocket createServerSocket(int pPort) throws IOException  {
+		return ServerSocketFactory.getDefault().createServerSocket(pPort, 0, getVNetContainerIPv4());
 	}
 
 	@SuppressWarnings("deprecation")
@@ -456,22 +446,19 @@ public class ShieldedCapsule extends Capsule implements NameService, ShieldedCap
 				namingPort = s.getLocalPort();
 			}
 			log(LOG_VERBOSE, "Starting JMXConnectorServer");
-			final String ip = getVNetContainerIPv4().getHostAddress();
-			final RMIServerSocketFactory serverFactory = new RMIServerSocketFactoryImpl(InetAddress.getByName(ip));
-
-			LocateRegistry.createRegistry(namingPort, null, serverFactory);
+			LocateRegistry.createRegistry(namingPort, null, this);
 
 			final StringBuilder url =
 					new StringBuilder()
 							.append("service:jmx:").append("rmi://").append("/jndi/")
-							.append("rmi://").append(ip).append(':').append(namingPort)
+							.append("rmi://").append(getVNetContainerIPv4().getHostAddress()).append(':').append(namingPort)
 							.append("/").append(UUID.randomUUID().toString());
 
 			log(LOG_VERBOSE, "Starting management agent at " + url);
 
 			final JMXServiceURL jmxServiceURL = new JMXServiceURL(url.toString());
 			final Map<String, Object> env = new HashMap<>();
-			env.put(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE, serverFactory);
+			env.put(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE, this);
 			final RMIConnectorServer rmiServer = new RMIConnectorServer(jmxServiceURL, env, ManagementFactory.getPlatformMBeanServer());
 			rmiServer.start();
 			return jmxServiceURL;
