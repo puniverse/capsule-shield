@@ -125,7 +125,11 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String OPT_LXC_ALLOW_TTY = OPTION("capsule.shield.lxc.allowTTY", null, null, false, LXC_ALLOW_TTY_DESC);
 	private static final Entry<String, Boolean> ATTR_LXC_ALLOW_TTY = ATTRIBUTE("LXC-Allow-TTY", T_BOOL(), false, true, LXC_ALLOW_TTY_DESC);
 
-	private static final String HOSTNAME_DESC = "The host name assigned to the container";
+	private static final String ID_DESC = "An optional shield ID (defaults to the capsule app ID)";
+	private static final String OPT_ID = OPTION("capsule.shield.id", null, null, false, ID_DESC);
+	private static final Entry<String, String> ATTR_ID = ATTRIBUTE("Shield-ID", T_STRING(), null, true, ID_DESC);
+
+	private static final String HOSTNAME_DESC = "The internal host name assigned to the container";
 	private static final String OPT_HOSTNAME = OPTION("capsule.shield.hostname", null, null, false, HOSTNAME_DESC);
 	private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, HOSTNAME_DESC);
 
@@ -156,6 +160,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static Inet4Address vnetContainerIPv4;
 	private static ServerSocket snss;
 	private static boolean includedBasicLoggingRedirectorsForClassPath, includedBasicLoggingRedirectorsForDeps;
+	private static String shieldID;
 
 	public ShieldedCapsule(Capsule pred) {
 		super(pred);
@@ -921,23 +926,45 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//</editor-fold>
 
 	//<editor-fold defaultstate="collapsed" desc="LXC Container Paths">
+	private static Path getShieldContainersAppDir(String shieldID) throws IOException {
+		return getUserHome().resolve("." + HOST_RELATIVE_CONTAINER_DIR_PARENT).resolve(shieldID);
+	}
+
+	private Path getContainerParentDir() throws IOException {
+		return getContainerParentDir(getShieldID());
+	}
+
+	private static Path getContainerDir(String shieldID) throws IOException {
+		return getShieldContainersAppDir(shieldID).resolve(CONTAINER_NAME).toAbsolutePath().normalize();
+	}
+
+	private String getShieldID() {
+		if (shieldID == null) {
+			final String optContainerName = getOptionOrAttributeString(OPT_ID, ATTR_ID);
+			if (optContainerName != null)
+				shieldID = optContainerName;
+			else
+				shieldID = getAppId();
+		}
+		return shieldID;
+	}
+
 	private Path getShieldContainersAppDir() throws IOException {
 		if (shieldContainersAppDir == null) {
-			shieldContainersAppDir = getUserHome().resolve("." + HOST_RELATIVE_CONTAINER_DIR_PARENT).resolve(getAppId());
+			shieldContainersAppDir = getShieldContainersAppDir(getShieldID());
 			Files.createDirectories(shieldContainersAppDir);
 		}
 		return shieldContainersAppDir;
 	}
 
-	@SuppressWarnings("deprecation")
 	private Path getContainerDir() throws IOException {
 		if (hostAbsoluteContainerDir == null)
-			hostAbsoluteContainerDir = getShieldContainersAppDir().resolve(CONTAINER_NAME).toAbsolutePath().normalize();
+			hostAbsoluteContainerDir = getContainerDir(getShieldID());
 		return hostAbsoluteContainerDir;
 	}
 
-	private Path getContainerParentDir() throws IOException {
-		return getContainerDir().getParent();
+	private static Path getContainerParentDir(String shieldID) throws IOException {
+		return getContainerDir(shieldID).getParent();
 	}
 
 	private Path getRootFSDir() throws IOException {
@@ -1187,7 +1214,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 
 	// TODO Factor with Capsule
 	//<editor-fold defaultstate="collapsed" desc="Copied from Capsule">
-	private Path getUserHome() {
+	private static Path getUserHome() {
 		final Path home;
 
 		final Path userHome = Paths.get(getProperty("user.home"));
