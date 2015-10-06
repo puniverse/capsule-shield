@@ -128,7 +128,6 @@ public class ShieldedCapsule extends Capsule implements NameService, RMIServerSo
 	private static final String PROP_CAPSULE_SHIELD_INTERNAL_SOCKETNODE = "capsule.internal.socketNode";
 	//</editor-fold>
 
-	private static Path hostAbsoluteOwnJarFile;
 
 	private static Path hostAbsoluteOwnJarFile;
 	private static Path localRepo;
