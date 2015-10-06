@@ -5,7 +5,6 @@
  * of the Eclipse Public License v1.0, available at
  * http://www.eclipse.org/legal/epl-v10.html
  */
-
 import co.paralleluniverse.common.JarClassLoader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
