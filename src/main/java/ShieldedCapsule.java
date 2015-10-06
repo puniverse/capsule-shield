@@ -33,6 +33,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.server.RMIServerSocketFactory;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.bridge.SLF4JBridgeHandler;
 
@@ -73,8 +74,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String PROP_JAVA_HOME = "java.home";
 	private static final String PROP_OS_NAME = "os.name";
 
-	// private static final String PROP_DOMAIN = "sun.net.spi.nameservice.domain";
-	// private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
+	private static final String PROP_DOMAIN = "sun.net.spi.nameservice.domain";
+	private static final String PROP_IPV6 = "java.net.preferIPv6Addresses";
+
 	private static final String PROP_PREFIX_NAMESERVICE = "sun.net.spi.nameservice.provider.";
 
 	private static final String CONTAINER_NET_IFACE_NAME = "eth0";
@@ -104,6 +106,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static final String OPT_LXC_PRIVILEGED = OPTION("capsule.shield.lxc.privileged", "false", null, false, "Whether the container should be privileged");
 	private static final String OPT_LXC_SYSSHAREDIR = OPTION("capsule.shield.lxc.sysShareDir", "/usr/share/lxc", null, false, "The location of the LXC toolchain's system-wide `share` directory");
 	private static final String OPT_JMX = OPTION("capsule.shield.jmx", "true", null, false, "Whether JMX will be proxied from the capsule parent process to the container");
+
+	private static final String OPT_PREFIX_LINK_IP = OPTION("capsule.internal.link.ip.", null, null, false, "INTERNAL USE ONLY: a `capsule.internal.link.ip.<hostname>=<IP>` option will create an <hostname> DNS entry towards <IP>");
+	private static final String OPT_PREFIX_LINK_ID = OPTION("capsule.link.", null, null, false, "A `capsule.link.<hostname>=<ID>` option will create an <hostname> DNS entry towards a shield container <ID>");
 
 	private static final String LXC_NETWORKING_TYPE_DESC = "The LXC networking type to be configured";
 	private static final String OPT_LXC_NETWORKING_TYPE = OPTION("capsule.shield.lxc.networkingType", null, null, false, LXC_NETWORKING_TYPE_DESC);
@@ -161,6 +166,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	private static ServerSocket snss;
 	private static boolean includedBasicLoggingRedirectorsForClassPath, includedBasicLoggingRedirectorsForDeps;
 	private static String shieldID;
+	private static Map<String, InetAddress[]> hostnameToInets = new ConcurrentHashMap<>();
+	private static Map<byte[], String> ipToHostname = new ConcurrentHashMap<>();
 
 	public ShieldedCapsule(Capsule pred) {
 		super(pred);
@@ -192,7 +199,7 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 
 		final ProcessBuilder pb = super.prelaunch(jvmArgs, args);
-		setupAgentAndJMXProps(pb.command());
+		setupProps(pb.command());
 		try {
 			pb.command().addAll(0,
 					Arrays.asList("lxc-execute",
@@ -342,8 +349,8 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//////////////////////////// CAPSULE AGENT //////////////////////////////
 	@Override
 	protected final void agent(Instrumentation inst) {
-		setupLinkNameService(); // must be done before call to super
 		try {
+			setupLinkNameService(); // must be done before call to super
 			redirectJUL(); // must be done before call to super
 			redirectLog4j(); // must be done before call to super
 		} catch (final Exception e) {
@@ -435,26 +442,48 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		}
 	}
 
-	private boolean setupAgentAndJMXProps(List<String> command) {
-		int idx = -1;
-		for(int i = 0; i < command.size(); i++) {
+	private void setupProps(List<String> command) {
+		setupCommProps(command);
+		setupLinkProps(command);
+	}
+
+	private void setupCommProps(List<String> command) {
+		for (int i = 0; i < command.size(); i++) {
 			if (command.get(i).startsWith("-Dcapsule.address=")) {
-				idx = i;
+				try {
+					command.set(i, "-Dcapsule.address=" + getVNetHostIPv4().getHostAddress());
+				} catch (final SocketException e) {
+					log(LOG_QUIET, "Couldn't setup the agent communication link: " + e.getMessage());
+					log(LOG_QUIET, e);
+				}
 				break;
 			}
 		}
-		if (idx >= 0) {
-			command.remove(idx);
-			try {
-				command.add(idx, "-Dcapsule.address=" + getVNetHostIPv4().getHostAddress());
-				return true;
-			} catch (final SocketException e) {
-				log(LOG_QUIET, "Couldn't setup the agent communication link: " + e.getMessage());
-				log(LOG_QUIET, e);
-				return false;
+	}
+
+	public void setupLinkProps(List<String> command) {
+		final String prefix = "-D" + OPT_PREFIX_LINK_ID;
+		for (int i = 0; i < command.size(); i++) {
+			final String opt = command.get(i);
+			final int eqIdx = opt.indexOf('=');
+			if (opt.startsWith(prefix)) {
+				final String hostname = opt.substring(prefix.length(), eqIdx);
+				final String shieldID = opt.substring(eqIdx + 1);
+				try {
+					final String replacement = "-D" + OPT_PREFIX_LINK_IP + hostname + "=" + getRunningInet(shieldID);
+					log(LOG_VERBOSE, "Replacing link property " + opt + " with " + replacement);
+					command.set(i, replacement);
+				} catch (final IOException e) {
+					log(LOG_QUIET, "Couldn't setup the agent communication link: " + e.getMessage());
+					log(LOG_QUIET, e);
+				}
+				break;
 			}
 		}
-		return false;
+	}
+
+	private static String getRunningInet(String shieldID) throws IOException {
+		return exec("lxc-info", "-P", getContainerParentDir(shieldID).toString(), "-n", CONTAINER_NAME, "-iH").iterator().next();
 	}
 	//</editor-fold>
 
@@ -983,8 +1012,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	//<editor-fold defaultstate="collapsed" desc="LXC Container NameService">
 	/////////// NameService ///////////////////////////////////
 
-	private static void setupLinkNameService() {
+	private static void setupLinkNameService() throws IOException {
 		// Find the lowest priority provider idx
+		log(LOG_VERBOSE, "Setting up link service");
 		int lastProviderIdx = -1;
 		for (int i = 1 ; ; i++) {
 			final String v = System.getProperty(PROP_PREFIX_NAMESERVICE + i);
@@ -996,23 +1026,46 @@ public class ShieldedCapsule extends Capsule implements NameService {
 		// Shift down existing providers, if any
 		for (int i = lastProviderIdx ; i > 0 ; i--) {
 			final String v = System.getProperty(PROP_PREFIX_NAMESERVICE + i);
-			System.setProperty(PROP_PREFIX_NAMESERVICE + i + 1, v);
+			log(LOG_VERBOSE, "Shifting down name provider " + v);
+			System.setProperty(PROP_PREFIX_NAMESERVICE + (i + 1), v);
 		}
 
 		// Add shield resolution as a top-proprity provider
+		log(LOG_VERBOSE, "Setting first name provider: dns,shield");
 		System.setProperty(PROP_PREFIX_NAMESERVICE + 1, "dns,shield");
+
+		buildLinkNameServiceTables();
+	}
+
+	private static void buildLinkNameServiceTables() throws IOException {
+		for (final Object o : System.getProperties().keySet()) {
+			if (o instanceof String) {
+				final String k = (String) o;
+				if (k.startsWith(OPT_PREFIX_LINK_IP)) {
+					intoLinkNameServiceTables(k.substring(OPT_PREFIX_LINK_IP.length()), InetAddress.getAllByName(System.getProperty(k)));
+				}
+			}
+		}
+	}
+
+	private static void intoLinkNameServiceTables(String name, InetAddress[] addrs) {
+		log(LOG_VERBOSE, "Adding name mapping " + name + " -> " + Arrays.toString(addrs));
+		hostnameToInets.put(name, addrs);
+		for (final InetAddress a : addrs)
+			ipToHostname.put(a.getAddress(), name);
 	}
 
 	/**
 	 * Look up all hosts by name.
 	 *
-	 * @param hostName the host name
+	 * @param hostname the host name
 	 * @return an array of addresses for the host name
 	 * @throws UnknownHostException if there are no names for this host, or if resolution fails
 	 */
-	public InetAddress[] lookupAllHostAddr(final String hostName) throws UnknownHostException {
-		// TODO: Linking
-		throw new UnknownHostException("Failed to resolve address");
+	public InetAddress[] lookupAllHostAddr(final String hostname) throws UnknownHostException {
+		final InetAddress[] ips = hostnameToInets.get(hostname);
+		if (ips != null) return ips;
+		throw new UnknownHostException("Failed to resolve hostname " + hostname);
 	}
 
 	/**
@@ -1023,8 +1076,9 @@ public class ShieldedCapsule extends Capsule implements NameService {
 	 * @throws UnknownHostException if there is no host name for this IP address
 	 */
 	public String getHostByAddr(final byte[] bytes) throws UnknownHostException {
-		// TODO: Linking
-		throw new UnknownHostException("Failed to resolve address");
+		final String hostname = ipToHostname.get(bytes);
+		if (hostname != null) return hostname;
+		throw new UnknownHostException("Failed to resolve inet address " + Arrays.toString(bytes));
 	}
 	//</editor-fold>
 
