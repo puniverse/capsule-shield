@@ -336,6 +336,13 @@ public class ShieldedCapsule extends Capsule implements NameService, RMIServerSo
 			lastProviderIdx = i;
 		}
 
+        // Install default provider if not found
+        if (lastProviderIdx == -1) {
+            log(LOG_VERBOSE, "No name provider found, installing the default one");
+            System.setProperty(PROP_PREFIX_NAMESERVICE + 1, "dns,sun");
+            lastProviderIdx = 1;
+        }
+
 		// Shift down existing providers, if any
 		for (int i = lastProviderIdx ; i > 0 ; i--) {
 			final String v = System.getProperty(PROP_PREFIX_NAMESERVICE + i);
