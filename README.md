@@ -43,7 +43,7 @@ It can be both run against (or embedded in) plain (e.g. "fat") capsules and [Mav
 
 See the next section for information about enabling, disabling and configuring `capsule-shield` features.
 
-## `capsule-shield` configuration
+## Configuration
 
 The following additional manifest entries (attributes) and options can be used to customize the container environment:
 
