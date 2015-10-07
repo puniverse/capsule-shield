@@ -1,5 +1,5 @@
 # Capsule Shield
-[![Build Status](http://img.shields.io/travis/puniverse/capsule-shield.svg?style=flat)](https://travis-ci.org/puniverse/capsule-shield) [![Dependency Status](https://www.versioneye.com/user/projects/5613c572a193340019000485/badge.svg?style=flat)](https://www.versioneye.com/user/projects/5613c572a193340019000485) [![Version](http://img.shields.io/badge/version-0.2-SNAPSHOT-yellow.svg?style=flat)](https://github.com/puniverse/capsule-shield/releases) [![License](http://img.shields.io/badge/license-EPL-blue.svg?style=flat)](https://www.eclipse.org/legal/epl-v10.html)
+[![Build Status](http://img.shields.io/travis/puniverse/capsule-shield.svg?style=flat)](https://travis-ci.org/puniverse/capsule-shield) [![Dependency Status](https://www.versioneye.com/user/projects/5613c572a193340019000485/badge.svg?style=flat)](https://www.versioneye.com/user/projects/5613c572a193340019000485) [![Version](http://img.shields.io/badge/version-0.1-yellow.svg?style=flat)](https://github.com/puniverse/capsule-shield/releases) [![License](http://img.shields.io/badge/license-EPL-blue.svg?style=flat)](https://www.eclipse.org/legal/epl-v10.html)
 
 A [caplet](https://github.com/puniverse/capsule#what-are-caplets) that launches a [capsule](https://github.com/puniverse/capsule) in a minimal container.
 
