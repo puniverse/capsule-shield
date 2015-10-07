@@ -6,10 +6,10 @@
  * http://www.eclipse.org/legal/epl-v10.html
  */
 import capsule.LXC;
+import capsule.Log4J2SocketServer;
 import capsule.ShieldedCapsuleAPI;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LoggerContext;
-import org.apache.logging.log4j.core.net.server.TcpSocketServer;
 import org.slf4j.bridge.SLF4JBridgeHandler;
 import sun.net.spi.nameservice.NameService;
 
@@ -266,34 +266,12 @@ public class ShieldedCapsule extends Capsule implements NameService, RMIServerSo
 		}
 	}
 
-	// In the "embedded caplet" setup the `Capsule` and `ShieldedCapsule` classloaders are different:
-	// - http://stackoverflow.com/questions/3386662/illegalaccesserror-accessing-a-protected-method
-	// - http://stackoverflow.com/questions/14070215/java-lang-illegalaccesserror-tried-to-access-field-concreteentity-instance-from
-	protected static void log0(int level, String str) {
-		log(level, str);
-	}
-
-	protected static void log0(int level, Throwable t) {
-		log(level, t);
-	}
-
 	private void startLog4j2TcpSocketServer() throws IOException {
 		final ServerSocket tmp = new ServerSocket(0);
 		log4j2TcpSocketServerPort = tmp.getLocalPort();
 		tmp.close();
 		log(LOG_VERBOSE, "Starting Log4J2 SocketServer on port " + log4j2TcpSocketServerPort);
-		new Thread(new Runnable() {
-			@Override
-			public void run() {
-				//noinspection InfiniteLoopStatement
-				try {
-					TcpSocketServer.createSerializedSocketServer(log4j2TcpSocketServerPort).run();
-				} catch (final IOException t) {
-					log0(LOG_QUIET, "Couldn't accept Log4J2 SocketNode connections: " + t.getMessage());
-					log0(LOG_QUIET, t);
-				}
-			}
-		}, "capsule-shield-log4j2-socketnode").start();
+		new Thread(new Log4J2SocketServer(this, log4j2TcpSocketServerPort), "capsule-shield-log4j2-socketnode").start();
 	}
 
 	//////////////////////////// CAPSULE AGENT //////////////////////////////
