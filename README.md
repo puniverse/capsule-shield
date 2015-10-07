@@ -45,36 +45,38 @@ See the next section for information about enabling, disabling and configuring `
 
 ## `capsule-shield` configuration
 
-The following additional manifest entries (attributes) and capsule options can be used to customize the container environment:
+The following additional manifest entries (attributes) and options can be used to customize the container environment:
 
-  * `capsule.destroyOnly` capsule option: if present or `true`, the container will be forcibly destroyed without re-creating and booting it afterwards.
-  * `capsule.privileged` capsule option: whether the container will be a privileged one or not; unprivileged containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/) and are safer (default: `false`).
-  * `capsule.jmx` capsule option: whether JMX will be proxied from the capsule parent process to the container (default: `true`).
-  * `capsule.redirectLog` capsule option: whether logging events should be redirected to the capsule process (default: `true`, requires `capsule.shield.jmx`).
+  * Option `capsule.id`: the runtime Shield ID of the container to be used in links (default = app ID).
+  * Options `capsule.link.<hostname>`: allows referring to the running container with a Shield ID equal to the option value with `<hostname>`.
+  * Option `capsule.jmx`: whether JMX will be proxied from the capsule parent process to the container (default: `true`).
+  * Option `capsule.redirectLog`: whether logging events should be redirected to the capsule process (default: `true`, requires `capsule.jmx`).
+  * Option `capsule.destroyOnly`: if present or `true`, the container will be forcibly destroyed without re-creating and booting it afterwards.
+  * Option `capsule.privileged`: whether the container will be a privileged one or not; unprivileged containers build upon [Linux User Namespaces](https://lwn.net/Articles/531114/) and are safer (default: `false`).
 
   * Valid for both privileged and unprivileged containers:
-    * `capsule.sysShareDir` capsule option: the location of the system-wide `share` directory where container toolchains can be found; the location is installation/distro-dependent but the default should work in most cases (default: `/usr/share`).
-    * `Network-Bridge` attribute: the name of the host bridge adapter for LXC networking (default: `lxcbr0`). The `capsule.networkBridge` capsule option can override it.
-    * `Hostname` attribute: the host name assigned to the container (default: _none_). The `capsule.hostname` capsule option can override it.
-    * `Set-Default-GW` attribute: whether the default gateway should be set in order to grant internet access to the container (default: `true`). The `capsule.setDefaultGW` capsule option can override it.
-    * `IP` attribute: whether the default gateway should be set in order to grant internet access to the container (default: `true`). The `capsule.ip` capsule option can override it.
-    * `Memory-Limit` attribute: `cgroup` memory limit (default: _none_). The `capsule.memoryLimit` capsule option can override it.
-    * `CPU-Shares` attribute: `cgroup` cpu shares (default: _none_). The `capsule.cpuShares` capsule option can override it.
+    * Option `capsule.sysShareDir`: the location of the system-wide `share` directory where container toolchains can be found; the location is installation / distro-dependent but the default should work in most cases (default: `/usr/share`).
+    * Attribute `Network-Bridge`: the name of the host bridge adapter for LXC networking (default: `lxcbr0`). The `capsule.networkBridge`  option can override it.
+    * Attribute `Hostname`: the host name assigned to the container (default: _none_). The `capsule.hostname` option can override it.
+    * `Set-Default-GW` attribute: whether the default gateway should be set in order to grant internet access to the container (default: `true`). The `capsule.setDefaultGW` option can override it.
+    * `IP` attribute: whether the default gateway should be set in order to grant internet access to the container (default: `true`). The `capsule.ip` option can override it.
+    * `Memory-Limit` attribute: `cgroup` memory limit (default: _none_). The `capsule.memoryLimit` option can override it.
+    * `CPU-Shares` attribute: `cgroup` cpu shares (default: _none_). The `capsule.cpuShares` option can override it.
 
   * Valid only for unprivileged containers ([some insight about user namespaces and user mappings](https://lwn.net/Articles/532593/) can be useful):
-    * `capsule.uidMapStart` capsule option: the first user ID in an unprivileged container (default: `100000`)
-    * `capsule.uidMapSize` capsule option: the size of the consecutive user ID map in an unprivileged container (default: `65536`)
-    * `capsule.gidMapStart` capsule option: the first group ID in an unprivileged container (default: `100000`)
-    * `capsule.gidMapSize` capsule option: the size of the consecutive group ID map in an unprivileged container (default: `65536`)
-    * `Allowed-Devices` attribute: a list of additional allowed devices in an unprivileged container (example: `"c 136:* rwm" ""`, default: _none_). The `capsule.allowedDevices` capsule option can override it.
+    * Option `capsule.uidMapStart`: the first user ID in an unprivileged container (default: `100000`)
+    * Option `capsule.uidMapSize`: the size of the consecutive user ID map in an unprivileged container (default: `65536`)
+    * Option `capsule.gidMapStart`: the first group ID in an unprivileged container (default: `100000`)
+    * Option `capsule.gidMapSize`: the size of the consecutive group ID map in an unprivileged container (default: `65536`)
+    * Attribute `Allowed-Devices`: a list of additional allowed devices in an unprivileged container (example: `"c 136:* rwm" ""`, default: _none_). The `capsule.allowedDevices` option can override it.
 
 ## Container locations
 
-The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule-shield/<app-id>/lxc` (or `${CAPSULE_APP_CACHE}/../capsule-shield/<app-id>/lxc` if Capsule's cache directory has been re-defined through the `CAPSULE_CACHE_DIR` environment variable) and re-created automatically when needed.
+The LXC container (both configuration file and a minimal root disk containing mostly mount points) will be created in `${HOME}/.capsule-shield/<Shield ID, default = app ID>/lxc` and managed automatically.
 
 ## Notes
 
-Please note that an unprivileged container's root disk is owned by a _subuid_ of the user launching the capsule and **cannot be destroyed without user mapping**; you can destroy the container by launching the capsule with the `capsule.shield.lxc.destroyOnly` option set. The removal can also be performed manually with `lxc-destroy -n lxc -P ${HOME}/.capsule-shield/<Shield ID, default = app ID>`.
+Please note that an unprivileged container's root disk is owned by a _subuid_ of the user launching the capsule and **cannot be destroyed without user mapping**; you can destroy the container by launching the capsule with the `capsule.destroyOnly` option set. The removal can also be performed manually with `lxc-destroy -n lxc -P ${HOME}/.capsule-shield/<Shield ID, default = app ID>`.
 
 ## License
 
