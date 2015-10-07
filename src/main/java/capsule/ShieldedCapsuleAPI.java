@@ -17,48 +17,52 @@ import java.util.List;
  * @author circlespainter
  */
 public interface ShieldedCapsuleAPI {
-	String CONTAINER_NET_IFACE_NAME = "eth0";
+    String CONTAINER_NET_IFACE_NAME = "eth0";
 
-	String OPT_SYSSHAREDIR = "capsule.sysShareDir";
-	String OPT_PRIVILEGED = "capsule.privileged";
-	String OPT_GID_MAP_SIZE = "capsule.gidMapSize";
-	String OPT_UID_MAP_SIZE = "capsule.uidMapSize";
-	String OPT_GID_MAP_START = "capsule.gidMapStart";
-	String OPT_UID_MAP_START = "capsule.uidMapStart";
+    String OPT_SYSSHAREDIR = "capsule.sysShareDir";
+    String OPT_PRIVILEGED = "capsule.privileged";
+    String OPT_GID_MAP_SIZE = "capsule.gidMapSize";
+    String OPT_UID_MAP_SIZE = "capsule.uidMapSize";
+    String OPT_GID_MAP_START = "capsule.gidMapStart";
+    String OPT_UID_MAP_START = "capsule.uidMapStart";
 
-	void logVerbose(String str);
-	void logDebug(Throwable t);
-	void logQuiet(String str);
-	void logQuiet(Throwable t);
+    void logVerbose(String str);
+    void logDebug(Throwable t);
+    void logQuiet(String str);
+    void logQuiet(Throwable t);
+    String getLogLevelString();
 
-	String getLogLevelString();
-	boolean isWrapper();
+    boolean isWrapper();
 
-	Iterable<String> execute(String... cmd) throws IOException;
+    Iterable<String> execute(String... cmd) throws IOException;
 
-	Inet4Address getVNetHostIPv4() throws SocketException;
-	Inet4Address getVNetContainerIPv4() throws SocketException;
+    Inet4Address getVNetHostIPv4() throws SocketException;
+    Inet4Address getVNetContainerIPv4() throws SocketException;
 
-	String getProp(String prop);
+    String getProp(String prop);
 
-	boolean isWin();
+    boolean isWin();
 
-	Path getCapsuleJarFile();
-	Path findOwnJarFile();
-	Path getLocalRepo();
-	Path getJavaDir();
-	Path getWAppCache();
+    Path getCapsuleJarFile();
+    Path findOwnJarFile();
+    Path getLocalRepo();
 
-	String getAppID();
+    Path getJavaDir();
+    Path getWAppCache();
 
-	String getEnv(String k);
-	String getMemorySwap(int maxMem, boolean b);
-	Boolean shouldSetDefaultGateway();
-	String getNetworkBridge();
-	String getHostname();
-	String getIP();
-	List<String> getAllowedDevices();
-	String getId();
-	Long getCPUShares();
-	Long getMemLimit();
+    String getAppID();
+    String getEnv(String k);
+    String getMemorySwap(int maxMem, boolean b);
+
+    Boolean shouldSetDefaultGateway();
+    String getNetworkBridge();
+
+    String getId();
+    String getIP();
+    String getHostname();
+
+    Long getCPUShares();
+    Long getMemLimit();
+
+    List<String> getAllowedDevices();
 }
