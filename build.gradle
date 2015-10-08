@@ -89,6 +89,11 @@ task sourcesJar(type: Jar, dependsOn: classes) {
     from sourceSets.main.allSource
 }
 
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
 ///////// Publish Artifacts
 apply plugin: 'maven'
 apply plugin: 'signing'
@@ -96,6 +101,7 @@ apply plugin: 'signing'
 artifacts {
     archives jar
     archives sourcesJar
+    archives javadocJar
 }
 
 signing {
