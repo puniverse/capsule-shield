@@ -1,9 +1,9 @@
 # *Capsule Shield*<br>Lightweight Containers for Capsule
-[![Build Status](http://img.shields.io/travis/puniverse/capsule-shield.svg?style=flat)](https://travis-ci.org/puniverse/capsule-shield) [![Dependency Status](https://www.versioneye.com/user/projects/5613c572a193340019000485/badge.svg?style=flat)](https://www.versioneye.com/user/projects/5613c572a193340019000485) [![Version](http://img.shields.io/badge/version-0.1-yellow.svg?style=flat)](https://github.com/puniverse/capsule-shield/releases) [![License](http://img.shields.io/badge/license-EPL-blue.svg?style=flat)](https://www.eclipse.org/legal/epl-v10.html)
+[![Build Status](http://img.shields.io/travis/puniverse/capsule-shield.svg?style=flat)](https://travis-ci.org/puniverse/capsule-shield) [![Dependency Status](https://www.versioneye.com/user/projects/5613c572a193340019000485/badge.svg?style=flat)](https://www.versioneye.com/user/projects/5613c572a193340019000485) [![Version](http://img.shields.io/badge/version-0.2.0-blue.svg?style=flat)](https://github.com/puniverse/capsule-shield/releases) [![License](http://img.shields.io/badge/license-EPL-blue.svg?style=flat)](https://www.eclipse.org/legal/epl-v10.html)
 
 A [caplet](https://github.com/puniverse/capsule#what-are-caplets) that launches a [capsule](https://github.com/puniverse/capsule) in leightweight container.
 
-At present `caosule-shield` supports [LXC](https://linuxcontainers.org/) on Linux. 
+At present `caosule-shield` supports [LXC](https://linuxcontainers.org/) on Linux.
 
 ## Requirements
 
@@ -15,7 +15,7 @@ In addition to [Capsule's](https://github.com/puniverse/capsule):
 
 ## Usage
 
-The Gradle-style dependency you need to explode or embed in your Capsule JAR, which you can generate with the tool you prefer (f.e. with plain Maven/Gradle as in [Photon](https://github.com/puniverse/photon) and [`capsule-gui-demo`](https://github.com/puniverse/capsule-gui-demo) or higher-level [Capsule build plugins](https://github.com/puniverse/capsule#build-tool-plugins)), is `co.paralleluniverse:capsule-shield:0.2.0-SNAPSHOT`. Also include the caplet in your Capsule manifest, for example if the caplet is exploded:
+The Gradle-style dependency you need to explode or embed in your Capsule JAR, which you can generate with the tool you prefer (f.e. with plain Maven/Gradle as in [Photon](https://github.com/puniverse/photon) and [`capsule-gui-demo`](https://github.com/puniverse/capsule-gui-demo) or higher-level [Capsule build plugins](https://github.com/puniverse/capsule#build-tool-plugins)), is `co.paralleluniverse:capsule-shield:0.2.0`. Also include the caplet in your Capsule manifest, for example if the caplet is exploded:
 
 ``` gradle
     Caplets: MavenCapsule ShieldedCapsule
@@ -24,13 +24,13 @@ The Gradle-style dependency you need to explode or embed in your Capsule JAR, wh
 if it's embedded as a JAR:
 
 ``` gradle
-    Caplets: MavenCapsule co.paralleluniverse:capsule-shield:0.2.0-SNAPSHOT
+    Caplets: MavenCapsule co.paralleluniverse:capsule-shield:0.2.0
 ```
 
 `capsule-shield` can also be run as a wrapper capsule:
 
 ``` bash
-$ java -Dcapsule.log=verbose -jar capsule-shield-0.2.0-SNAPSHOT.jar my-capsule.jar my-capsule-arg1 ...
+$ java -Dcapsule.log=verbose -jar capsule-shield-0.2.0.jar my-capsule.jar my-capsule-arg1 ...
 ```
 
 It can be both run against (or embedded in) plain (e.g. "fat") capsules and [Maven-based](https://github.com/puniverse/capsule-maven) ones.
