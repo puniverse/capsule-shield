@@ -3,7 +3,7 @@
 
 A [caplet](https://github.com/puniverse/capsule#what-are-caplets) that launches a [capsule](https://github.com/puniverse/capsule) in leightweight container.
 
-At present `caosule-shield` supports [LXC](https://linuxcontainers.org/) on Linux.
+At present `capsule-shield` supports [LXC](https://linuxcontainers.org/) on Linux.
 
 ## Requirements
 
