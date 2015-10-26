@@ -116,9 +116,9 @@ public class ShieldedCapsule extends Capsule implements NameService, RMIServerSo
     private static final String OPT_HOSTNAME = OPTION("capsule.hostname", null, null, false, HOSTNAME_DESC);
     private static final Entry<String, String> ATTR_HOSTNAME = ATTRIBUTE("Hostname", T_STRING(), null, true, HOSTNAME_DESC);
 
-    private static final String ALLOWED_DEVICES_DESC = "a list of additional allowed devices in an unprivileged container (example: `\"c 136:* rwm\" \"\"`";
+    private static final String ALLOWED_DEVICES_DESC = "a comma-separated list of additional allowed devices in an unprivileged container (example: `c 136:* rwm,c 1:5 rwm`";
     private static final String OPT_ALLOWED_DEVICES = OPTION("capsule.allowedDevices", null, null, false, ALLOWED_DEVICES_DESC);
-    private static final Entry<String, List<String>> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_LIST(T_STRING()), null, true, ALLOWED_DEVICES_DESC);
+    private static final Entry<String, String> ATTR_ALLOWED_DEVICES = ATTRIBUTE("Allowed-Devices", T_STRING(), null, true, ALLOWED_DEVICES_DESC);
 
     private static final String CPU_SHARES_DESC = "`cgroup` CPU shares";
     private static final String OPT_CPU_SHARES = OPTION("capsule.cpuShares", null, null, false, CPU_SHARES_DESC);
@@ -584,7 +584,7 @@ public class ShieldedCapsule extends Capsule implements NameService, RMIServerSo
 
     @Override
     public List<String> getAllowedDevices() {
-        return getOptionOrAttributeStringList(OPT_ALLOWED_DEVICES, ATTR_ALLOWED_DEVICES);
+        return Arrays.asList(getOptionOrAttributeString(OPT_ALLOWED_DEVICES, ATTR_ALLOWED_DEVICES).split("\\s*,\\s*"));
     }
 
     @Override

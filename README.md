@@ -68,7 +68,7 @@ The following additional manifest entries (attributes) and options can be used t
     * Option `capsule.uidMapSize`: the size of the consecutive user ID map in an unprivileged container (default: `65536`)
     * Option `capsule.gidMapStart`: the first group ID in an unprivileged container (default: `100000`)
     * Option `capsule.gidMapSize`: the size of the consecutive group ID map in an unprivileged container (default: `65536`)
-    * Attribute `Allowed-Devices`: a list of additional allowed devices in an unprivileged container (example: `"c 136:* rwm" ""`, default: _none_). The `capsule.allowedDevices` option can override it.
+    * Attribute `Allowed-Devices`: a comma-separated list of additional allowed devices in an unprivileged container (example: `c 136:* rwm,c 1:5 rwm`, default: _none_). The `capsule.allowedDevices` option can override it.
 
 ## Container locations
 
