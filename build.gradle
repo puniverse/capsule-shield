@@ -10,7 +10,7 @@ targetCompatibility = '1.7'
 [compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
 
 group               = "co.paralleluniverse"
-version             = "0.2.0"
+version             = "0.3.0-SNAPSHOT"
 status              = "integration"
 description         = "Container Caplet"
 ext.url             = "http://puniverse.github.com/quasar"
