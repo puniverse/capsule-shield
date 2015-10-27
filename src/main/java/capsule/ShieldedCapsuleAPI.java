@@ -27,6 +27,7 @@ public interface ShieldedCapsuleAPI {
     String OPT_UID_MAP_START = "capsule.uidMapStart";
 
     void logVerbose(String str);
+    void logDebug(String t);
     void logDebug(Throwable t);
     void logQuiet(String str);
     void logQuiet(Throwable t);

@@ -687,6 +687,11 @@ public class ShieldedCapsule extends Capsule implements NameService, RMIServerSo
     }
 
     @Override
+    public void logDebug(String str) {
+        Capsule.log(LOG_DEBUG, str);
+    }
+
+    @Override
     public void logQuiet(String str) {
         Capsule.log(LOG_QUIET, str);
     }
