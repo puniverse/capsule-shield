@@ -167,6 +167,10 @@ public class ShieldedCapsule extends Capsule implements NameService, RMIServerSo
         setupProps(pb.command());
         try {
             pb.command().addAll(0, lxc.commandPrefix());
+            if (hasAttribute(ATTR_SCRIPT)) {
+                log(LOG_VERBOSE, "Detected Application-Script, ensuring executable in container");
+                lxc.ensureExecutableInContainer(getWritableAppCache(), ((Entry) getAttribute(ATTR_SCRIPT)).getValue().toString());
+            }
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }

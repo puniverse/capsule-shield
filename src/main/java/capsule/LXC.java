@@ -584,6 +584,23 @@ public class LXC {
 
     // TODO Factor with Capsule
     //<editor-fold defaultstate="collapsed" desc="Posix Utils">
+    public void ensureExecutableInContainer(Path rel, String p) {
+        final Path pAbs = rel.resolve(p).toAbsolutePath().normalize();
+        shield.logVerbose("Making world executable " + pAbs);
+        try {
+            Path parent = rel;
+            for (final Path pElem : Paths.get(p)) {
+                final Path toChmod = parent.resolve(pElem).toAbsolutePath().normalize();
+                shield.logDebug("chmod" + " a+rx " + toChmod.toString());
+                shield.execute("chmod", "a+rx", toChmod.toString());
+                parent = pElem;
+            }
+        } catch (final IOException e) {
+            shield.logQuiet("Couldn't chmod a+rx " + pAbs + ": " + e.getMessage());
+            shield.logQuiet(e);
+        }
+    }
+
     private static Long getCurrentUID() throws IOException, InterruptedException {
         return getPosixSubjectID("-u");
     }
