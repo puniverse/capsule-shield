@@ -25,7 +25,7 @@ ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
 ext.capsule = 'Capsule'
 ext.caplet  = 'ShieldedCapsule'
 
-ext.capsuleVer        = '1.0.1'
+ext.capsuleVer        = '1.0.2-SNAPSHOT'
 ext.log4j2Ver         = '2.4'
 ext.slf4jVer          = '1.7.12'
 
